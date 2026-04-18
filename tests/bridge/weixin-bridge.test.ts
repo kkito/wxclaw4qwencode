@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WeixinBridge } from '../../src/bridge/weixin-bridge';
 import { createMsg } from '@agentscope-ai/agentscope/message';
 
@@ -6,6 +6,10 @@ describe('WeixinBridge', () => {
   let bridge: WeixinBridge;
   let mockAgent: any;
   let mockSendMessage: ReturnType<typeof vi.fn>;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(() => {
     mockSendMessage = vi.fn().mockResolvedValue(undefined);
@@ -68,8 +72,6 @@ describe('WeixinBridge', () => {
       expect(consoleWarn).toHaveBeenCalledWith('消息缺少 from_user_id');
       expect(mockAgent.reply).not.toHaveBeenCalled();
       expect(mockSendMessage).not.toHaveBeenCalled();
-
-      consoleWarn.mockRestore();
     });
 
     it('should handle empty message with default text', async () => {
@@ -198,8 +200,6 @@ describe('WeixinBridge', () => {
         'user123',
         '抱歉，处理您的消息时出现错误，请稍后重试。'
       );
-
-      consoleError.mockRestore();
     });
 
     it('should handle empty agent response', async () => {
@@ -217,8 +217,6 @@ describe('WeixinBridge', () => {
 
       expect(consoleWarn).toHaveBeenCalledWith('Agent 返回为空');
       expect(mockSendMessage).not.toHaveBeenCalled();
-
-      consoleWarn.mockRestore();
     });
 
     it('should not send message when reply content is empty', async () => {
@@ -242,8 +240,6 @@ describe('WeixinBridge', () => {
 
       expect(consoleWarn).toHaveBeenCalledWith('Agent 回复为空');
       expect(mockSendMessage).not.toHaveBeenCalled();
-
-      consoleWarn.mockRestore();
     });
   });
 });
