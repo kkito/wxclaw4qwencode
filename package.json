@@ -13,11 +13,13 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "typescript": "^5.7.3"
   },
   "dependencies": {
     "@agentscope-ai/agentscope": "^0.0.2",
     "@tencent-weixin/openclaw-weixin": "^2.1.8",
-    "@tencent-weixin/openclaw-weixin-cli": "^2.1.2"
+    "@tencent-weixin/openclaw-weixin-cli": "^2.1.2",
+    "zod": "^4.3.6"
   }
 }
