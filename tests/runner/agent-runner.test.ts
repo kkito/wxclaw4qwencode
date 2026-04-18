@@ -75,6 +75,8 @@ describe('createAgentRunner', () => {
 
     expect(runner).toBeDefined();
     expect(runner.getBridge()).toBeDefined();
+
+    await runner.stop();
     mockLoadConfig.mockRestore();
   });
 
@@ -100,5 +102,7 @@ describe('createAgentRunner', () => {
 
     expect(runner).toBeDefined();
     expect(mockLoadConfig).not.toHaveBeenCalled();
+
+    await runner.stop();
   });
 });
