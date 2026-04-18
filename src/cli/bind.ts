@@ -13,7 +13,7 @@ const QR_LONG_POLL_TIMEOUT_MS = 35_000;
 /**
  * 调用微信 ilink API 获取二维码
  */
-async function fetchQRCode(apiBaseUrl: string, botType: string): Promise<{ qrcode: string; qrcode_img_content: string }> {
+export async function fetchQRCode(apiBaseUrl: string, botType: string): Promise<{ qrcode: string; qrcode_img_content: string }> {
   const response = await fetch(`${apiBaseUrl}/ilink/bot/get_bot_qrcode?bot_type=${encodeURIComponent(botType)}`, {
     method: 'GET',
     headers: {
@@ -32,7 +32,7 @@ async function fetchQRCode(apiBaseUrl: string, botType: string): Promise<{ qrcod
 /**
  * 轮询二维码状态
  */
-async function pollQRStatus(apiBaseUrl: string, qrcode: string): Promise<{
+export async function pollQRStatus(apiBaseUrl: string, qrcode: string): Promise<{
   status: 'wait' | 'scaned' | 'confirmed' | 'expired' | 'scaned_but_redirect';
   bot_token?: string;
   ilink_bot_id?: string;
