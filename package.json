@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
+  "bin": {
+    "ownclaw": "dist/cli.js"
+  },
   "type": "module",
   "scripts": {
     "build": "tsc",
