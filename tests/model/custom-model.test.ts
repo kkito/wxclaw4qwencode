@@ -36,11 +36,46 @@ describe('CustomModel', () => {
     });
 
     it('should strip trailing slash from baseUrl', () => {
+      // Create a non-streaming model with trailing slash
       const modelNoSlash = new CustomModel({
         baseUrl: 'https://api.example.com/v1/',
         modelName: 'gpt-4o',
       });
-      expect(modelNoSlash.modelName).toBe('gpt-4o');
+      Object.defineProperty(modelNoSlash, 'stream', { value: false });
+
+      const mockResponse = {
+        id: 'chatcmpl-123',
+        model: 'gpt-4o',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Hello!',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 5,
+          total_tokens: 15,
+        },
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const msgs = createMessages();
+      modelNoSlash.call({ messages: msgs });
+
+      // Verify the URL does NOT have double slashes (i.e., trailing slash was stripped)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/v1/chat/completions',
+        expect.anything()
+      );
     });
   });
 
@@ -206,28 +241,14 @@ describe('CustomModel', () => {
     });
 
     it('should throw error when response body is null in streaming', async () => {
-      // The test verifies that when the streaming response has no body, 
-      // it falls through to non-streaming path and returns a regular response
-      // Instead of throwing "Response body is null", it tries to parse JSON
-      
-      // Add json method to make the non-streaming path work
       mockFetch.mockResolvedValue({
         ok: true,
         body: null,
-        json: async () => ({
-          id: 'test',
-          choices: [{ message: { role: 'assistant', content: 'test' } }],
-        }),
       });
 
       const msgs = createMessages();
 
-      // Since body is null with stream=true, it falls through to non-streaming
-      const result = await model.call({ messages: msgs });
-      
-      // Should return a regular response from non-streaming path
-      expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toBe('test');
+      await expect(model.call({ messages: msgs })).rejects.toThrow('Response body is null');
     });
   });
 });

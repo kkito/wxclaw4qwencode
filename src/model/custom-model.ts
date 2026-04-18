@@ -124,7 +124,10 @@ export class CustomModel extends ChatModelBase {
       throw new Error(`API call failed: ${response.status} ${await response.text()}`);
     }
 
-    if (isStream && response.body) {
+    if (isStream) {
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
       return this.parseStreamResponse(response, modelName);
     }
 
