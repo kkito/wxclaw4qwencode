@@ -1,0 +1,22 @@
+{
+  "name": "ownclaw",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@tencent-weixin/openclaw-weixin": "^2.1.8",
+    "@tencent-weixin/openclaw-weixin-cli": "^2.1.2"
+  }
+}

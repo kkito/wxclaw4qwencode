@@ -1,0 +1,63 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@tencent-weixin/openclaw-weixin':
+        specifier: ^2.1.8
+        version: 2.1.8
+      '@tencent-weixin/openclaw-weixin-cli':
+        specifier: ^2.1.2
+        version: 2.1.2
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+packages:
+
+  '@tencent-weixin/openclaw-weixin-cli@2.1.2':
+    resolution: {integrity: sha512-tZO2Fs0MbzEbhJC0aLS4SjYTqqwX5j0fmiMvuS/fu7JMEx9iljGrw1y+hp6oU0elLp2u/RSIL0uuxs1KFnhipg==}
+    engines: {node: '>=22'}
+    hasBin: true
+    peerDependencies:
+      openclaw: '>=2026.3.0'
+    peerDependenciesMeta:
+      openclaw:
+        optional: true
+
+  '@tencent-weixin/openclaw-weixin@2.1.8':
+    resolution: {integrity: sha512-YM2fumDI+NvslhFH4gsek+scgCwTdyz7eMDyfNadCTXPjh9hoosn8tcMF0P90gQJEGEud7AJXiKKd8IKGNCfRA==}
+    engines: {node: '>=22'}
+
+  qrcode-terminal@0.12.0:
+    resolution: {integrity: sha512-EXtzRZmC+YGmGlDFbXKxQiMZNwCLEO6BANKXG4iCtSIM0yqc/pappSx3RIKr4r0uh5JsBckOXeKrB3Iz7mdQpQ==}
+    hasBin: true
+
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
+snapshots:
+
+  '@tencent-weixin/openclaw-weixin-cli@2.1.2': {}
+
+  '@tencent-weixin/openclaw-weixin@2.1.8':
+    dependencies:
+      qrcode-terminal: 0.12.0
+      zod: 4.3.6
+
+  qrcode-terminal@0.12.0: {}
+
+  typescript@5.9.3: {}
+
+  zod@4.3.6: {}
