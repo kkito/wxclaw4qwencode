@@ -25,7 +25,7 @@ export function loadConfig(): Config {
     throw new Error('AGENT_MODEL_BASE_URL 环境变量未设置');
   }
 
-  return {
+  const config = {
     agentscope: {
       model: {
         type: 'custom' as const,
@@ -36,4 +36,6 @@ export function loadConfig(): Config {
       sysPrompt,
     },
   };
+
+  return ConfigSchema.parse(config);
 }
