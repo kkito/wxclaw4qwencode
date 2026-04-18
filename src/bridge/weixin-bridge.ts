@@ -53,14 +53,29 @@ export class WeixinBridge {
       return;
     }
 
-    // 转换为 AgentScope 消息
-    const msg = this.convertToMsg(weixinMsg);
-    
-    // 调用 Agent 处理
-    const reply = await this.agent.reply({ msgs: [msg] });
-    
-    // 发送回复
-    await this.sendReply(userId, reply);
+    try {
+      // 转换为 AgentScope 消息
+      const msg = this.convertToMsg(weixinMsg);
+
+      // 调用 Agent 处理
+      const reply = await this.agent.reply({ msgs: [msg] });
+
+      if (!reply) {
+        console.warn('Agent 返回为空');
+        return;
+      }
+
+      // 发送回复
+      await this.sendReply(userId, reply);
+    } catch (error) {
+      console.error('处理消息失败:', error);
+      // 可以选择发送错误消息给用户
+      try {
+        await this.sendMessageFn(userId, '抱歉，处理您的消息时出现错误，请稍后重试。');
+      } catch {
+        // 忽略发送错误消息的失败
+      }
+    }
   }
 
   private convertToMsg(weixinMsg: WeixinMessage): Msg {
