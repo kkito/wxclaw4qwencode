@@ -23,6 +23,34 @@ export interface CustomModelConfig {
   modelName: string;
 }
 
+export interface ChatCompletionResponse {
+  id: string;
+  object?: string;
+  created?: number;
+  model?: string;
+  choices?: Array<{
+    index: number;
+    message?: {
+      role?: string;
+      content?: string;
+      tool_calls?: Array<{
+        id: string;
+        type: string;
+        function: {
+          name: string;
+          arguments: string;
+        };
+      }>;
+    };
+    finish_reason?: string;
+  }>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
 export class CustomModel extends ChatModelBase {
   private baseUrl: string;
   private apiKey?: string;
@@ -36,7 +64,12 @@ export class CustomModel extends ChatModelBase {
   // 实现 _callAPI
   protected async _callAPI(
     modelName: string,
-    options: { messages: any[]; functions?: any[]; function_call?: any; [key: string]: any }
+    options: {
+      messages: Msg[];
+      functions?: ToolSchema[];
+      function_call?: string;
+      [key: string]: unknown;
+    }
   ): Promise<ChatResponse | AsyncGenerator<ChatResponse>> {
     const isStream = this.stream;
     const url = `${this.baseUrl}/chat/completions`;
@@ -48,7 +81,7 @@ export class CustomModel extends ChatModelBase {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
-    const body: any = {
+    const body: Record<string, unknown> = {
       model: modelName,
       messages: this.convertMsgsToOpenAI(options.messages),
     };
@@ -56,7 +89,7 @@ export class CustomModel extends ChatModelBase {
     // Spread options except messages to avoid overwriting
     for (const [key, value] of Object.entries(options)) {
       if (key !== 'messages') {
-        (body as any)[key] = value;
+        body[key] = value;
       }
     }
 
@@ -64,11 +97,28 @@ export class CustomModel extends ChatModelBase {
       body.stream = true;
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error('API request timed out');
+        }
+        throw new Error(`API request failed: ${error.message}`);
+      }
+      throw new Error(`API request failed: ${String(error)}`);
+    }
 
     if (!response.ok) {
       throw new Error(`API call failed: ${response.status} ${await response.text()}`);
@@ -78,21 +128,28 @@ export class CustomModel extends ChatModelBase {
       return this.parseStreamResponse(response, modelName);
     }
 
-    const data = await response.json();
+    const jsonData = await response.json();
+    const data = jsonData as ChatCompletionResponse;
     return this.convertResponse(data, modelName);
   }
 
-  private convertMsgsToOpenAI(msgs: Msg[]): any[] {
+  private convertMsgsToOpenAI(
+    msgs: Msg[]
+  ): Array<{ role: string; content: string }> {
     return msgs.map((msg) => ({
       role: msg.role,
-      content: msg.content
-        ?.filter((c: any) => c.type === 'text')
-        .map((c: any) => c.text)
-        .join('\n') || '',
+      content:
+        msg.content
+          ?.filter((c): c is TextBlock => c.type === 'text')
+          .map((c) => c.text)
+          .join('\n') || '',
     }));
   }
 
-  private convertResponse(data: any, modelName: string): ChatResponse {
+  private convertResponse(
+    data: ChatCompletionResponse,
+    modelName: string
+  ): ChatResponse {
     const choice = data.choices?.[0];
     const msg = choice?.message;
     
@@ -192,7 +249,12 @@ export class CustomModel extends ChatModelBase {
   // countTokens 估算
   async countTokens(options: { messages: Msg[]; functions?: ToolSchema[] }): Promise<number> {
     const text = options.messages
-      .map((m) => m.content?.map((c: any) => c.text || '').join('') || '')
+      .map((m) =>
+        m.content
+          ?.filter((c): c is TextBlock => c.type === 'text')
+          .map((c) => c.text || '')
+          .join('') || ''
+      )
       .join('\n');
     return Math.ceil(text.length / 4);
   }
