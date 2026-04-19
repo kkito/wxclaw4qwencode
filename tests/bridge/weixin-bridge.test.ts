@@ -223,7 +223,9 @@ describe('WeixinBridge', () => {
       await bridge.handleMessage(weixinMsg);
 
       expect(mockLogger.warn).toHaveBeenCalledWith('Agent 返回为空');
-      expect(mockSendMessage).not.toHaveBeenCalled();
+      // 会发送"已收到，开始处理..."提示，但不会发送空回复
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+      expect(mockSendMessage).toHaveBeenCalledWith('user123', '已收到，开始处理...');
     });
 
     it('should not send message when reply content is empty', async () => {
@@ -245,7 +247,9 @@ describe('WeixinBridge', () => {
       await bridge.handleMessage(weixinMsg);
 
       expect(mockLogger.warn).toHaveBeenCalledWith('Agent 回复为空');
-      expect(mockSendMessage).not.toHaveBeenCalled();
+      // 会发送"已收到，开始处理..."提示，但不会发送空回复
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+      expect(mockSendMessage).toHaveBeenCalledWith('user123', '已收到，开始处理...');
     });
   });
 });
