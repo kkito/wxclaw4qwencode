@@ -3,6 +3,7 @@
  * 直接实现登录 API 调用，避免依赖 openclaw-weixin 内部模块
  */
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import { resolveStateDir } from './config.js';
 
 const DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com';
@@ -81,24 +82,23 @@ export async function pollQRStatus(apiBaseUrl: string, qrcode: string): Promise<
 /**
  * 保存账户信息到 ~/.ownclaw
  */
-function saveAccount(accountId: string, data: {
+export function saveAccount(accountId: string, data: {
   token?: string;
   baseUrl?: string;
   userId?: string;
 }): void {
   const stateDir = resolveStateDir();
   const accountsDir = `${stateDir}/openclaw-weixin/accounts`;
-  
+
   // 创建目录
-  const fs = require('fs');
-  require('fs').mkdirSync(accountsDir, { recursive: true });
+  fs.mkdirSync(accountsDir, { recursive: true });
 
   const accountPath = `${accountsDir}/${accountId}.json`;
-  
+
   // 读取现有数据
   let existing = {};
   try {
-    existing = JSON.parse(require('fs').readFileSync(accountPath, 'utf-8'));
+    existing = JSON.parse(fs.readFileSync(accountPath, 'utf-8'));
   } catch {
     // 文件不存在，使用空对象
   }
@@ -110,20 +110,20 @@ function saveAccount(accountId: string, data: {
     ...(data.userId && { userId: data.userId }),
   };
 
-  require('fs').writeFileSync(accountPath, JSON.stringify(accountData, null, 2), 'utf-8');
+  fs.writeFileSync(accountPath, JSON.stringify(accountData, null, 2), 'utf-8');
 
   // 更新索引
   const indexPath = `${stateDir}/openclaw-weixin/accounts.json`;
   let accountIds: string[] = [];
   try {
-    accountIds = JSON.parse(require('fs').readFileSync(indexPath, 'utf-8'));
+    accountIds = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
   } catch {
     accountIds = [];
   }
 
   if (!accountIds.includes(accountId)) {
     accountIds.push(accountId);
-    require('fs').writeFileSync(indexPath, JSON.stringify(accountIds, null, 2), 'utf-8');
+    fs.writeFileSync(indexPath, JSON.stringify(accountIds, null, 2), 'utf-8');
   }
 }
 

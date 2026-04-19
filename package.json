@@ -12,7 +12,10 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "bind": "node dist/cli.js bind",
+    "unbind": "node dist/cli.js unbind",
+    "status": "node dist/cli.js status"
   },
   "keywords": [],
   "author": "",

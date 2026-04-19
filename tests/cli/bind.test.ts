@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { fetchQRCode, pollQRStatus } from '../../src/cli/bind';
+import { fetchQRCode, pollQRStatus, saveAccount } from '../../src/cli/bind';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -148,14 +148,56 @@ describe('cli/bind - saveAccount', () => {
     vi.restoreAllMocks();
   });
 
-  it('should save account and update index', async () => {
-    // 由于 saveAccount 是内部函数且使用 require('fs')，我们需要完整测试 bindCommand
-    // 这里先跳过详细测试，后续可以通过集成测试覆盖
-    const weixinDir = path.join(tempDir, 'openclaw-weixin');
-    const accountsDir = path.join(weixinDir, 'accounts');
-    fs.mkdirSync(accountsDir, { recursive: true });
+  it('should save account and create index file', () => {
+    const accountId = 'test_bot_123';
+    const token = 'test_token_abc';
+    const baseUrl = 'https://ilinkai.weixin.qq.com';
+    const userId = 'test_user_001';
 
-    // 直接调用内部 saveAccount 函数需要导出，这里只验证目录结构存在
-    expect(fs.existsSync(accountsDir)).toBe(true);
+    saveAccount(accountId, { token, baseUrl, userId });
+
+    // 验证账号文件
+    const accountPath = path.join(tempDir, 'openclaw-weixin', 'accounts', `${accountId}.json`);
+    expect(fs.existsSync(accountPath)).toBe(true);
+
+    const accountData = JSON.parse(fs.readFileSync(accountPath, 'utf-8'));
+    expect(accountData.token).toBe(token);
+    expect(accountData.baseUrl).toBe(baseUrl);
+    expect(accountData.userId).toBe(userId);
+
+    // 验证索引文件
+    const indexPath = path.join(tempDir, 'openclaw-weixin', 'accounts.json');
+    expect(fs.existsSync(indexPath)).toBe(true);
+
+    const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+    expect(indexData).toContain(accountId);
+  });
+
+  it('should update existing account data', () => {
+    const accountId = 'test_bot_456';
+    const weixinDir = path.join(tempDir, 'openclaw-weixin', 'accounts');
+    fs.mkdirSync(weixinDir, { recursive: true });
+
+    // 创建已有账号文件
+    const existingData = { oldField: 'oldValue' };
+    fs.writeFileSync(
+      path.join(weixinDir, `${accountId}.json`),
+      JSON.stringify(existingData)
+    );
+
+    // 创建已有索引
+    fs.writeFileSync(
+      path.join(tempDir, 'openclaw-weixin', 'accounts.json'),
+      JSON.stringify([accountId])
+    );
+
+    saveAccount(accountId, { token: 'new_token' });
+
+    const accountPath = path.join(weixinDir, `${accountId}.json`);
+    const accountData = JSON.parse(fs.readFileSync(accountPath, 'utf-8'));
+
+    // 验证保留旧数据并添加新数据
+    expect(accountData.oldField).toBe('oldValue');
+    expect(accountData.token).toBe('new_token');
   });
 });
