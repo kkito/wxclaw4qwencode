@@ -35,14 +35,27 @@ interface WeixinAccount {
 }
 
 interface WeixinMessage {
-  from_user_id: string;
-  to_user_id: string;
-  item_list: Array<{
+  seq?: number;
+  message_id?: number;
+  from_user_id?: string;
+  to_user_id?: string;
+  message_type?: number;
+  item_list?: Array<{
     type: number;
     content?: string;
-    media_id?: string;
+    media_url?: string;
+    file_name?: string;
+    text_item?: { text: string };
   }>;
-  create_time: number;
+  context_token?: string;
+}
+
+interface GetUpdatesResp {
+  ret?: number;
+  errcode?: number;
+  errmsg?: string;
+  msgs?: WeixinMessage[];
+  get_updates_buf?: string;
 }
 
 function resolveStateDir(): string {
@@ -86,45 +99,60 @@ interface WeixinApiResponse {
   messages?: WeixinMessage[];
 }
 
-async function getUpdates(baseUrl: string, token: string): Promise<WeixinMessage[]> {
-  const response = await fetch(`${baseUrl}/ilink/bot/get_updates?bot_token=${encodeURIComponent(token)}`, {
+async function getUpdatesLib(baseUrl: string, token: string, getUpdatesBuf: string = ''): Promise<{ messages: WeixinMessage[]; buf: string }> {
+  const response = await fetch(`${baseUrl}/ilink/bot/getupdates`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      get_updates_buf: getUpdatesBuf,
+    }),
+    signal: AbortSignal.timeout(35000),
   });
 
   if (!response.ok) {
-    throw new Error(`get_updates failed: ${response.status}`);
+    throw new Error(`getupdates failed: ${response.status}`);
   }
 
-  const json = await response.json() as WeixinApiResponse;
+  const resp = await response.json() as GetUpdatesResp;
 
-  // 检查业务层错误码
-  if (json.errcode !== undefined && json.errcode !== 0) {
+  if (resp.errcode !== undefined && resp.errcode !== 0) {
     const errorMessages: Record<number, string> = {
       [-14]: '会话已过期，请重新绑定: pnpm run bind',
       [-1]: '系统错误',
       [-2]: '参数错误',
     };
-    const msg = errorMessages[json.errcode] ?? json.errmsg ?? `未知错误 (${json.errcode})`;
-    throw new Error(`Weixin API error: ${json.errcode} - ${msg}`);
+    const msg = errorMessages[resp.errcode] ?? resp.errmsg ?? `未知错误 (${resp.errcode})`;
+    throw new Error(`Weixin API error: ${resp.errcode} - ${msg}`);
   }
 
-  return json.messages || [];
+  return {
+    messages: resp.msgs || [],
+    buf: resp.get_updates_buf || '',
+  };
 }
 
-async function sendMessage(baseUrl: string, token: string, toUserId: string, text: string): Promise<void> {
-  const response = await fetch(`${baseUrl}/ilink/bot/sendmessage?bot_token=${encodeURIComponent(token)}`, {
+async function sendMessageLib(baseUrl: string, token: string, toUserId: string, text: string): Promise<void> {
+  const response = await fetch(`${baseUrl}/ilink/bot/sendmessage`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
     body: JSON.stringify({
-      to_user_id: toUserId,
       msg: {
+        from_user_id: '',
+        to_user_id: toUserId,
+        client_id: `ownclaw-${Date.now()}`,
         message_type: 2,
-        item_list: [{ type: 1, content: text }],
+        message_state: 2,
+        item_list: [{ type: 1, text_item: { text } }],
       },
     }),
   });
-  
+
   if (!response.ok) {
     throw new Error(`sendmessage failed: ${response.status}`);
   }
@@ -201,7 +229,7 @@ async function startMain(): Promise<void> {
       logger,
       weixin: {
         sendMessage: async (to: string, text: string) => {
-          await sendMessage(account.baseUrl!, account.token!, to, text);
+          await sendMessageLib(account.baseUrl!, account.token!, to, text);
         },
       },
     });
@@ -211,20 +239,22 @@ async function startMain(): Promise<void> {
   }
   
   const bridge = runner.getBridge();
-  
+
   // 消息监控循环
   let running = true;
   let lastEventTime = Date.now();
-  
+  let getUpdatesBuf = '';
+
   logger.info('👂 开始监听微信消息...');
-  
+
   const pollMessage = async () => {
     if (!running) return;
-    
+
     try {
-      const messages = await getUpdates(account.baseUrl!, account.token!);
-      
-      if (messages.length > 0) {
+      const { messages, buf } = await getUpdatesLib(account.baseUrl!, account.token!, getUpdatesBuf);
+      getUpdatesBuf = buf;
+
+      if (messages && messages.length > 0) {
         lastEventTime = Date.now();
         logger.debug(`收到 ${messages.length} 条消息`);
         

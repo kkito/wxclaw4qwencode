@@ -6,7 +6,7 @@ import { getGlobalLogger, Logger } from '../logger.js';
  * 微信消息类型 - 从 openclaw-weixin 包
  * 包含 from_user_id, item_list 等字段
  */
-interface WeixinMessage {
+export interface WeixinMessage {
   seq?: number;
   message_id?: number;
   from_user_id?: string;
@@ -16,7 +16,7 @@ interface WeixinMessage {
   context_token?: string;
 }
 
-interface MessageItem {
+export interface MessageItem {
   type: number;
   content?: string;
   media_url?: string;
