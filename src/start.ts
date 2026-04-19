@@ -24,6 +24,7 @@ import { spawn } from 'node:child_process';
 import { loadConfig, Config } from './config.js';
 import { createLogger, LogLevel, Logger } from './logger.js';
 import { AgentRunner, createAgentRunner } from './runner/agent-runner.js';
+import { withRetry } from './utils/retry.js';
 
 // ============== 微信 API 相关 ==============
 
@@ -246,33 +247,53 @@ async function startMain(): Promise<void> {
   const pollMessage = async () => {
     if (!running) return;
 
-    try {
-      const { messages, buf } = await getUpdatesLib(account.baseUrl!, account.token!, getUpdatesBuf);
-      getUpdatesBuf = buf;
-
-      if (messages && messages.length > 0) {
-        lastEventTime = Date.now();
-        logger.debug(`收到 ${messages.length} 条消息`);
-        
-        for (const msg of messages) {
-          try {
-            await bridge.handleMessage(msg);
-          } catch (error) {
-            logger.error('处理消息失败:', error);
+    const result = await withRetry(
+      async () => {
+        return await getUpdatesLib(account.baseUrl!, account.token!, getUpdatesBuf);
+      },
+      {
+        timeout: 35000,
+        initialRetries: 3,
+        initialInterval: 30000,
+        waitTimes: [60000, 120000, 180000],
+        constantWait: 300000,
+        maxTotalTime: 1800000,
+        onRetry: (attempt, error, waitTime) => {
+          const mins = Math.floor(waitTime / 60000);
+          logger.warn(`获取消息失败 (第 ${attempt} 次)，${mins} 分钟后重试: ${error.message}`);
+        },
+        shouldRetry: (error, _attempt) => {
+          // 会话过期错误不重试，需要用户重新绑定
+          const errMsg = String(error);
+          if (errMsg.includes('-14') || errMsg.includes('会话已过期')) {
+            return false;
           }
+          return true;
+        },
+      }
+    );
+
+    if (!result.success) {
+      logger.error(`获取消息失败: ${result.error?.message}`);
+      logger.error(`已重试 ${result.attempts} 次，总耗时 ${Math.floor(result.totalTime / 1000)}s`);
+      logger.error('请检查网络连接后重试运行');
+      process.exit(1);
+    }
+
+    const { messages, buf } = result.data!;
+    getUpdatesBuf = buf;
+
+    if (messages && messages.length > 0) {
+      lastEventTime = Date.now();
+      logger.debug(`收到 ${messages.length} 条消息`);
+
+      for (const msg of messages) {
+        try {
+          await bridge.handleMessage(msg);
+        } catch (error) {
+          logger.error('处理消息失败:', error);
         }
       }
-    } catch (error) {
-      const errMsg = String(error);
-      // 会话过期错误需要用户重新绑定
-      if (errMsg.includes('-14') || errMsg.includes('会话已过期')) {
-        logger.error(`❌ ${error}`);
-        logger.error('请重新绑定微信: pnpm run bind');
-        process.exit(1);
-      }
-      // 其他错误也直接退出
-      logger.error(`获取消息失败: ${error}`);
-      process.exit(1);
     }
 
     // 5 秒后继续轮询

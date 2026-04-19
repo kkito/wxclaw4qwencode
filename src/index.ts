@@ -20,6 +20,9 @@ export { WeixinBridge, WeixinBridgeOptions } from './bridge/weixin-bridge.js';
 // 运行器
 export { AgentRunner, AgentRunnerConfig, createAgentRunner } from './runner/agent-runner.js';
 
+// 重试工具
+export { withRetry, retryable, RetryOptions, RetryResult } from './utils/retry.js';
+
 // AgentScope 类型（重新导出方便使用）
 export { Agent } from '@agentscope-ai/agentscope/agent';
 export { createMsg, Msg, TextBlock, ContentBlock } from '@agentscope-ai/agentscope/message';
