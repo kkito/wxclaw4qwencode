@@ -1,5 +1,6 @@
 import { Agent } from '@agentscope-ai/agentscope/agent';
 import { createMsg, Msg, TextBlock, ContentBlock } from '@agentscope-ai/agentscope/message';
+import { getGlobalLogger, Logger } from '../logger';
 
 /**
  * 微信消息类型 - 从 openclaw-weixin 包
@@ -35,21 +36,24 @@ const MessageItemType = {
 export interface WeixinBridgeOptions {
   agent: Agent;
   sendMessage: (to: string, text: string) => Promise<void>;
+  logger?: Logger;
 }
 
 export class WeixinBridge {
   private agent: Agent;
   private sendMessageFn: (to: string, text: string) => Promise<void>;
+  private logger: Logger;
 
   constructor(options: WeixinBridgeOptions) {
     this.agent = options.agent;
     this.sendMessageFn = options.sendMessage;
+    this.logger = options.logger || getGlobalLogger();
   }
 
   async handleMessage(weixinMsg: WeixinMessage): Promise<void> {
     const userId = weixinMsg.from_user_id;
     if (!userId) {
-      console.warn('消息缺少 from_user_id');
+      this.logger.warn('消息缺少 from_user_id');
       return;
     }
 
@@ -57,18 +61,31 @@ export class WeixinBridge {
       // 转换为 AgentScope 消息
       const msg = this.convertToMsg(weixinMsg);
 
+      const text = (msg.content ?? [])
+        .filter((c): c is TextBlock => c.type === 'text')
+        .map((c) => c.text)
+        .join('');
+      this.logger.debug(`收到消息 from ${userId}: ${text}`);
+
       // 调用 Agent 处理
       const reply = await this.agent.reply({ msgs: [msg] });
 
       if (!reply) {
-        console.warn('Agent 返回为空');
+        this.logger.warn('Agent 返回为空');
         return;
       }
 
+      const replyText = (reply.content ?? [])
+        .filter((c): c is TextBlock => c.type === 'text')
+        .map((c) => c.text)
+        .join('');
+      this.logger.debug(`回复内容: ${replyText}`);
+
       // 发送回复
       await this.sendReply(userId, reply);
+      this.logger.debug(`已发送回复 to ${userId}`);
     } catch (error) {
-      console.error('处理消息失败:', error);
+      this.logger.error('处理消息失败:', error);
       // 可以选择发送错误消息给用户
       try {
         await this.sendMessageFn(userId, '抱歉，处理您的消息时出现错误，请稍后重试。');
@@ -81,7 +98,7 @@ export class WeixinBridge {
   private convertToMsg(weixinMsg: WeixinMessage): Msg {
     const userId = weixinMsg.from_user_id || 'unknown';
     const text = this.extractText(weixinMsg);
-    
+
     return createMsg({
       name: userId,
       role: 'user',
@@ -98,7 +115,7 @@ export class WeixinBridge {
   private extractText(msg: WeixinMessage): string {
     const items = msg.item_list;
     if (!items || items.length === 0) return '';
-    
+
     for (const item of items) {
       switch (item.type) {
         case MessageItemType.TEXT:
@@ -123,9 +140,9 @@ export class WeixinBridge {
       .filter((c: ContentBlock): c is TextBlock => c.type === 'text')
       .map((c: TextBlock) => c.text)
       .join('');
-    
+
     if (!text) {
-      console.warn('Agent 回复为空');
+      this.logger.warn('Agent 回复为空');
       return;
     }
 

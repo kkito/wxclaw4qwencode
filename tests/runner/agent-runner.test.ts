@@ -1,13 +1,21 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AgentRunner, createAgentRunner } from '../../src/runner/agent-runner';
 import * as configModule from '../../src/config';
+import { Logger } from '../../src/logger';
 
 describe('AgentRunner', () => {
   let runner: AgentRunner;
   let mockSendMessage: ReturnType<typeof vi.fn>;
+  let mockLogger: Logger;
 
   beforeEach(() => {
     mockSendMessage = vi.fn().mockResolvedValue(undefined);
+    mockLogger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
 
     runner = new AgentRunner({
       model: {
@@ -19,6 +27,7 @@ describe('AgentRunner', () => {
       weixin: {
         sendMessage: mockSendMessage,
       },
+      logger: mockLogger,
     });
   });
 
@@ -30,15 +39,11 @@ describe('AgentRunner', () => {
 
   describe('start/stop', () => {
     it('should start and stop runner', async () => {
-      const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
-
       await runner.start();
-      expect(consoleLog).toHaveBeenCalledWith('AgentRunner started');
+      expect(mockLogger.info).toHaveBeenCalledWith('AgentRunner started');
 
       await runner.stop();
-      expect(consoleLog).toHaveBeenCalledWith('AgentRunner stopped');
-
-      consoleLog.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith('AgentRunner stopped');
     });
   });
 });
@@ -50,6 +55,9 @@ describe('createAgentRunner', () => {
   beforeEach(() => {
     mockSendMessage = vi.fn().mockResolvedValue(undefined);
     mockLoadConfig = vi.spyOn(configModule, 'loadConfig').mockReturnValue({
+      log: {
+        level: 'info' as const,
+      },
       agentscope: {
         model: {
           type: 'custom' as const,
@@ -82,6 +90,9 @@ describe('createAgentRunner', () => {
 
   it('should create runner with custom config', async () => {
     const customConfig = {
+      log: {
+        level: 'info' as const,
+      },
       agentscope: {
         model: {
           type: 'custom' as const,

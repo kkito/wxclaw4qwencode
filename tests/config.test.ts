@@ -70,6 +70,9 @@ describe('config', () => {
   describe('ConfigSchema', () => {
     it('should validate correct config', () => {
       const validConfig = {
+        log: {
+          level: 'info',
+        },
         agentscope: {
           model: {
             type: 'custom',

@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WeixinBridge } from '../../src/bridge/weixin-bridge';
 import { createMsg } from '@agentscope-ai/agentscope/message';
+import { Logger } from '../../src/logger';
 
 describe('WeixinBridge', () => {
   let bridge: WeixinBridge;
   let mockAgent: any;
   let mockSendMessage: ReturnType<typeof vi.fn>;
+  let mockLogger: Logger;
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -13,7 +15,7 @@ describe('WeixinBridge', () => {
 
   beforeEach(() => {
     mockSendMessage = vi.fn().mockResolvedValue(undefined);
-    
+
     mockAgent = {
       reply: vi.fn().mockResolvedValue(
         createMsg({
@@ -24,9 +26,17 @@ describe('WeixinBridge', () => {
       ),
     };
 
+    mockLogger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
     bridge = new WeixinBridge({
       agent: mockAgent,
       sendMessage: mockSendMessage,
+      logger: mockLogger,
     });
   });
 
@@ -60,7 +70,6 @@ describe('WeixinBridge', () => {
     });
 
     it('should warn and return when from_user_id is missing', async () => {
-      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const weixinMsg = {
         item_list: [
           { type: 1, content: 'Hello' },
@@ -69,7 +78,7 @@ describe('WeixinBridge', () => {
 
       await bridge.handleMessage(weixinMsg);
 
-      expect(consoleWarn).toHaveBeenCalledWith('消息缺少 from_user_id');
+      expect(mockLogger.warn).toHaveBeenCalledWith('消息缺少 from_user_id');
       expect(mockAgent.reply).not.toHaveBeenCalled();
       expect(mockSendMessage).not.toHaveBeenCalled();
     });
@@ -183,7 +192,6 @@ describe('WeixinBridge', () => {
   describe('error handling', () => {
     it('should handle agent reply error gracefully', async () => {
       mockAgent.reply.mockRejectedValue(new Error('Agent error'));
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const weixinMsg = {
         from_user_id: 'user123',
@@ -194,7 +202,7 @@ describe('WeixinBridge', () => {
 
       await bridge.handleMessage(weixinMsg);
 
-      expect(consoleError).toHaveBeenCalledWith('处理消息失败:', expect.any(Error));
+      expect(mockLogger.error).toHaveBeenCalledWith('处理消息失败:', expect.any(Error));
       // Should send error message to user
       expect(mockSendMessage).toHaveBeenCalledWith(
         'user123',
@@ -204,7 +212,6 @@ describe('WeixinBridge', () => {
 
     it('should handle empty agent response', async () => {
       mockAgent.reply.mockResolvedValue(null);
-      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const weixinMsg = {
         from_user_id: 'user123',
@@ -215,7 +222,7 @@ describe('WeixinBridge', () => {
 
       await bridge.handleMessage(weixinMsg);
 
-      expect(consoleWarn).toHaveBeenCalledWith('Agent 返回为空');
+      expect(mockLogger.warn).toHaveBeenCalledWith('Agent 返回为空');
       expect(mockSendMessage).not.toHaveBeenCalled();
     });
 
@@ -227,7 +234,6 @@ describe('WeixinBridge', () => {
           content: [],
         })
       );
-      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const weixinMsg = {
         from_user_id: 'user123',
@@ -238,7 +244,7 @@ describe('WeixinBridge', () => {
 
       await bridge.handleMessage(weixinMsg);
 
-      expect(consoleWarn).toHaveBeenCalledWith('Agent 回复为空');
+      expect(mockLogger.warn).toHaveBeenCalledWith('Agent 回复为空');
       expect(mockSendMessage).not.toHaveBeenCalled();
     });
   });

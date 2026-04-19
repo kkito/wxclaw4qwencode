@@ -1,6 +1,16 @@
 // 配置
 export { loadConfig, Config, ConfigSchema } from './config';
 
+// 日志
+export {
+  LogLevel,
+  Logger,
+  LoggerConfig,
+  createLogger,
+  getGlobalLogger,
+  setGlobalLogger,
+} from './logger';
+
 // 模型
 export { CustomModel, CustomModelConfig } from './model/custom-model';
 
