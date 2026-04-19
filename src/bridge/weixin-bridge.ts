@@ -61,12 +61,16 @@ export class WeixinBridge {
     }
 
     try {
-      // 转换为 AgentScope 消息
-      const msg = this.convertToMsg(weixinMsg);
-
       const text = this.extractText(weixinMsg);
 
-      this.logger.debug(`收到消息 from ${userId}: ${text}`);
+      // 日志打印用户发送的内容
+      this.logger.info(`[用户消息] from ${userId}: ${text}`);
+
+      // 先发送"已收到开始处理"提示
+      await this.sendMessageFn(userId, '已收到，开始处理...');
+
+      // 转换为 AgentScope 消息
+      const msg = this.convertToMsg(weixinMsg);
 
       // 调用 Agent 处理
       const reply = await this.agent.reply({ msgs: [msg] });
@@ -80,7 +84,9 @@ export class WeixinBridge {
         .filter((c): c is TextBlock => c.type === 'text')
         .map((c) => c.text)
         .join('');
-      this.logger.debug(`回复内容: ${replyText}`);
+
+      // 日志打印回复内容
+      this.logger.info(`[Agent回复] to ${userId}: ${replyText}`);
 
       // 发送回复
       await this.sendReply(userId, reply);
