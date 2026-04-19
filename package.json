@@ -15,7 +15,8 @@
     "test:run": "vitest run",
     "bind": "node dist/cli.js bind",
     "unbind": "node dist/cli.js unbind",
-    "status": "node dist/cli.js status"
+    "status": "node dist/cli.js status",
+    "start": "node dist/start.js"
   },
   "keywords": [],
   "author": "",

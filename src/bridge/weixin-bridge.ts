@@ -1,6 +1,6 @@
 import { Agent } from '@agentscope-ai/agentscope/agent';
 import { createMsg, Msg, TextBlock, ContentBlock } from '@agentscope-ai/agentscope/message';
-import { getGlobalLogger, Logger } from '../logger';
+import { getGlobalLogger, Logger } from '../logger.js';
 
 /**
  * 微信消息类型 - 从 openclaw-weixin 包

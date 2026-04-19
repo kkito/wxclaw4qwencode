@@ -1,5 +1,5 @@
 // 配置
-export { loadConfig, Config, ConfigSchema } from './config';
+export { loadConfig, Config, ConfigSchema } from './config.js';
 
 // 日志
 export {
@@ -9,16 +9,16 @@ export {
   createLogger,
   getGlobalLogger,
   setGlobalLogger,
-} from './logger';
+} from './logger.js';
 
 // 模型
-export { CustomModel, CustomModelConfig } from './model/custom-model';
+export { CustomModel, CustomModelConfig } from './model/custom-model.js';
 
 // 桥接器
-export { WeixinBridge, WeixinBridgeOptions } from './bridge/weixin-bridge';
+export { WeixinBridge, WeixinBridgeOptions } from './bridge/weixin-bridge.js';
 
 // 运行器
-export { AgentRunner, AgentRunnerConfig, createAgentRunner } from './runner/agent-runner';
+export { AgentRunner, AgentRunnerConfig, createAgentRunner } from './runner/agent-runner.js';
 
 // AgentScope 类型（重新导出方便使用）
 export { Agent } from '@agentscope-ai/agentscope/agent';

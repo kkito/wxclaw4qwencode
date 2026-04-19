@@ -1,8 +1,8 @@
 import { Agent } from '@agentscope-ai/agentscope/agent';
-import { CustomModel, CustomModelConfig } from '../model/custom-model';
-import { WeixinBridge } from '../bridge/weixin-bridge';
-import { loadConfig, Config } from '../config';
-import { createLogger, getGlobalLogger, Logger } from '../logger';
+import { CustomModel, CustomModelConfig } from '../model/custom-model.js';
+import { WeixinBridge } from '../bridge/weixin-bridge.js';
+import { loadConfig, Config } from '../config.js';
+import { createLogger, getGlobalLogger, Logger } from '../logger.js';
 
 export interface AgentRunnerConfig {
   model: CustomModelConfig;
