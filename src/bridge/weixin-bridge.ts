@@ -18,6 +18,9 @@ export interface WeixinMessage {
 
 export interface MessageItem {
   type: number;
+  text_item?: {
+    text: string;
+  };
   content?: string;
   media_url?: string;
   file_name?: string;
@@ -61,10 +64,8 @@ export class WeixinBridge {
       // 转换为 AgentScope 消息
       const msg = this.convertToMsg(weixinMsg);
 
-      const text = (msg.content ?? [])
-        .filter((c): c is TextBlock => c.type === 'text')
-        .map((c) => c.text)
-        .join('');
+      const text = this.extractText(weixinMsg);
+
       this.logger.debug(`收到消息 from ${userId}: ${text}`);
 
       // 调用 Agent 处理
@@ -114,12 +115,14 @@ export class WeixinBridge {
 
   private extractText(msg: WeixinMessage): string {
     const items = msg.item_list;
+    
     if (!items || items.length === 0) return '';
 
     for (const item of items) {
       switch (item.type) {
         case MessageItemType.TEXT:
-          return item.content || '';
+          // 微信消息结构是 text_item.text，不是 content
+          return item.text_item?.text || item.content || '';
         case MessageItemType.IMAGE:
           return '（收到图片消息，暂不支持）';
         case MessageItemType.VOICE:

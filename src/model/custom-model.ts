@@ -195,10 +195,33 @@ export class CustomModel extends ChatModelBase {
     let accumulatedText = '';
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
+    let isDone = false;
 
-    while (true) {
+    while (!isDone) {
       const { done, value } = await reader.read();
-      if (done) break;
+
+      if (done) {
+        // 流结束但尚未收到 [DONE]，可能是连接提前关闭
+        if (accumulatedText) {
+          yield {
+            type: 'chat' as const,
+            id,
+            createdAt,
+            content: [{
+              type: 'text' as const,
+              text: accumulatedText,
+              id: crypto.randomUUID(),
+            }],
+            usage: {
+              type: 'chat_usage' as const,
+              inputTokens: 0,
+              outputTokens: 0,
+              time: 0,
+            },
+          };
+        }
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -210,8 +233,8 @@ export class CustomModel extends ChatModelBase {
 
         const data = trimmed.slice(5).trim();
         if (data === '[DONE]') {
-          // 返回最终消息
-          yield {
+          // 返回最终消息，包含 usage
+          const finalResponse: ChatResponse = {
             type: 'chat',
             id,
             createdAt,
@@ -220,8 +243,16 @@ export class CustomModel extends ChatModelBase {
               text: accumulatedText,
               id: crypto.randomUUID(),
             }],
+            usage: {
+              type: 'chat_usage',
+              inputTokens: 0,
+              outputTokens: 0,
+              time: 0,
+            },
           };
-          return;
+          yield finalResponse;
+          isDone = true;
+          break;
         }
 
         try {
@@ -232,14 +263,20 @@ export class CustomModel extends ChatModelBase {
           if (content) {
             accumulatedText += content;
             yield {
-              type: 'chat',
+              type: 'chat' as const,
               id: id,
               createdAt: new Date().toISOString(),
               content: [{
-                type: 'text',
+                type: 'text' as const,
                 text: content,
                 id: crypto.randomUUID(),
               }],
+              usage: {
+                type: 'chat_usage' as const,
+                inputTokens: 0,
+                outputTokens: 0,
+                time: 0,
+              },
             };
           }
         } catch {
