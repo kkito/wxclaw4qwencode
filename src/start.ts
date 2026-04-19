@@ -2,14 +2,14 @@
 
 /**
  * OwnClaw 启动脚本
- * 
+ *
  * 环境变量：
  *   AGENT_MODEL_BASE_URL  - 必需，模型 API 地址
  *   AGENT_MODEL_API_KEY   - 可选，API Key
  *   AGENT_MODEL_NAME      - 可选，模型名称，默认 gpt-4o
  *   AGENT_SYS_PROMPT      - 可选，系统提示词
  *   AGENT_LOG_LEVEL       - 可选，日志级别，默认 info
- * 
+ *
  * 用法：
  *   pnpm run build
  *   pnpm start              # 前台运行
@@ -34,29 +34,9 @@ interface WeixinAccount {
   savedAt?: string;
 }
 
-interface WeixinMessage {
-  seq?: number;
-  message_id?: number;
-  from_user_id?: string;
-  to_user_id?: string;
-  message_type?: number;
-  item_list?: Array<{
-    type: number;
-    content?: string;
-    media_url?: string;
-    file_name?: string;
-    text_item?: { text: string };
-  }>;
-  context_token?: string;
-}
-
-interface GetUpdatesResp {
-  ret?: number;
-  errcode?: number;
-  errmsg?: string;
-  msgs?: WeixinMessage[];
-  get_updates_buf?: string;
-}
+// 使用 any 避免与官方库类型冲突
+type WeixinMessage = any;
+type GetUpdatesResp = any;
 
 function resolveStateDir(): string {
   const envPath = process.env.OWNCLAW_STATE_DIR?.trim();
@@ -99,16 +79,26 @@ interface WeixinApiResponse {
   messages?: WeixinMessage[];
 }
 
+// 手动实现 API 调用，使用官方库相同的 headers
 async function getUpdatesLib(baseUrl: string, token: string, getUpdatesBuf: string = ''): Promise<{ messages: WeixinMessage[]; buf: string }> {
-  const response = await fetch(`${baseUrl}/ilink/bot/getupdates`, {
+  const url = `${baseUrl}/ilink/bot/getupdates`;
+  const requestBody = JSON.stringify({
+    get_updates_buf: getUpdatesBuf,
+  });
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'AuthorizationType': 'ilink_bot_token',
+    'Authorization': `Bearer ${token}`,
+    'X-WECHAT-UIN': String(Math.floor(Math.random() * 0xffffffff)),
+    'iLink-App-Id': '',
+    'iLink-App-ClientVersion': '65536',
+  };
+
+  const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      get_updates_buf: getUpdatesBuf,
-    }),
+    headers,
+    body: requestBody,
     signal: AbortSignal.timeout(35000),
   });
 
@@ -116,7 +106,7 @@ async function getUpdatesLib(baseUrl: string, token: string, getUpdatesBuf: stri
     throw new Error(`getupdates failed: ${response.status}`);
   }
 
-  const resp = await response.json() as GetUpdatesResp;
+  const resp = await response.json() as any;
 
   if (resp.errcode !== undefined && resp.errcode !== 0) {
     const errorMessages: Record<number, string> = {
@@ -135,12 +125,18 @@ async function getUpdatesLib(baseUrl: string, token: string, getUpdatesBuf: stri
 }
 
 async function sendMessageLib(baseUrl: string, token: string, toUserId: string, text: string): Promise<void> {
+  const headers = {
+    'Content-Type': 'application/json',
+    'AuthorizationType': 'ilink_bot_token',
+    'Authorization': `Bearer ${token}`,
+    'X-WECHAT-UIN': String(Math.floor(Math.random() * 0xffffffff)),
+    'iLink-App-Id': '',
+    'iLink-App-ClientVersion': '65536',
+  };
+
   const response = await fetch(`${baseUrl}/ilink/bot/sendmessage`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
+    headers,
     body: JSON.stringify({
       msg: {
         from_user_id: '',
