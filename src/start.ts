@@ -80,17 +80,35 @@ function loadWeixinAccount(): WeixinAccount | null {
   }
 }
 
+interface WeixinApiResponse {
+  errcode?: number;
+  errmsg?: string;
+  messages?: WeixinMessage[];
+}
+
 async function getUpdates(baseUrl: string, token: string): Promise<WeixinMessage[]> {
   const response = await fetch(`${baseUrl}/ilink/bot/get_updates?bot_token=${encodeURIComponent(token)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
-  
+
   if (!response.ok) {
     throw new Error(`get_updates failed: ${response.status}`);
   }
-  
-  const json = await response.json() as { messages?: WeixinMessage[] };
+
+  const json = await response.json() as WeixinApiResponse;
+
+  // 检查业务层错误码
+  if (json.errcode !== undefined && json.errcode !== 0) {
+    const errorMessages: Record<number, string> = {
+      [-14]: '会话已过期，请重新绑定: pnpm run bind',
+      [-1]: '系统错误',
+      [-2]: '参数错误',
+    };
+    const msg = errorMessages[json.errcode] ?? json.errmsg ?? `未知错误 (${json.errcode})`;
+    throw new Error(`Weixin API error: ${json.errcode} - ${msg}`);
+  }
+
   return json.messages || [];
 }
 
@@ -219,15 +237,24 @@ async function startMain(): Promise<void> {
         }
       }
     } catch (error) {
-      logger.debug('获取消息失败:', error);
+      const errMsg = String(error);
+      // 会话过期错误需要用户重新绑定
+      if (errMsg.includes('-14') || errMsg.includes('会话已过期')) {
+        logger.error(`❌ ${error}`);
+        logger.error('请重新绑定微信: pnpm run bind');
+        process.exit(1);
+      }
+      // 其他错误也直接退出
+      logger.error(`获取消息失败: ${error}`);
+      process.exit(1);
     }
-    
+
     // 5 秒后继续轮询
     if (running) {
       setTimeout(pollMessage, 5000);
     }
   };
-  
+
   // 启动轮询
   pollMessage();
   
