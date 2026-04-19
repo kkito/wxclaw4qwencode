@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
+    "dev:test": "node dist/test-agent.js",
     "bind": "node dist/cli.js bind",
     "unbind": "node dist/cli.js unbind",
     "status": "node dist/cli.js status",

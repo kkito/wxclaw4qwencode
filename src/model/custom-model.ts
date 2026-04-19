@@ -203,7 +203,7 @@ export class CustomModel extends ChatModelBase {
       if (done) {
         // 流结束但尚未收到 [DONE]，可能是连接提前关闭
         if (accumulatedText) {
-          yield {
+          const finalResponse = {
             type: 'chat' as const,
             id,
             createdAt,
@@ -219,8 +219,10 @@ export class CustomModel extends ChatModelBase {
               time: 0,
             },
           };
+          yield finalResponse;
+          return finalResponse;
         }
-        break;
+        return;
       }
 
       buffer += decoder.decode(value, { stream: true });
@@ -251,8 +253,7 @@ export class CustomModel extends ChatModelBase {
             },
           };
           yield finalResponse;
-          isDone = true;
-          break;
+          return finalResponse;
         }
 
         try {
