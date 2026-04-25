@@ -19,12 +19,26 @@ src/
 ├── config.ts              # 环境变量配置加载与 Zod 验证
 ├── index.ts               # 入口文件，统一导出
 ├── example.ts             # 使用示例
+├── cron/                  # Cron 定时任务模块
+│   ├── types.ts           # 类型定义 (CronJob, CronLogEntry)
+│   ├── schema.ts          # Zod 验证 schema
+│   ├── store.ts           # 文件存储 (jobs.json + logs)
+│   ├── executor.ts        # bash 命令执行 + 日志记录
+│   ├── scheduler.ts       # node-cron 调度管理
+│   ├── manager.ts         # 高层管理器 (组合 store/scheduler/executor)
+│   └── index.ts           # 统一导出
 ├── model/
 │   └── custom-model.ts    # 自定义模型客户端 (继承 ChatModelBase)
 ├── bridge/
 │   └── weixin-bridge.ts   # 微信消息 ↔ AgentScope 消息转换
-└── runner/
-    └── agent-runner.ts    # Agent 生命周期管理
+├── runner/
+│   └── agent-runner.ts    # Agent 生命周期管理
+└── web/
+    ├── index.ts           # Web 模块导出
+    ├── server.tsx         # Hono Web 服务器 (含 cron API 路由)
+    └── views/
+        ├── index.tsx      # 首页
+        └── cron.tsx       # Cron 管理页面
 
 tests/                     # Vitest 单元测试
 docs/                      # 文档资料
@@ -52,6 +66,28 @@ docs/                      # 文档资料
 | `AGENT_MODEL_NAME` | 否 | `gpt-4o` | 模型名称 |
 | `AGENT_SYS_PROMPT` | 否 | `你是一个友好的 AI 助手。` | 系统提示词 |
 
+### Cron 配置存储
+
+| 路径 | 说明 |
+|------|------|
+| `~/.ownclaw/cron/jobs.json` | Cron 任务列表 |
+| `~/.ownclaw/cron/logs/` | Cron 执行日志 |
+
+## Cron 功能
+
+通过 Web 界面 (`/cron`) 或 API 管理 bash 脚本定时任务:
+
+| API | 说明 |
+|-----|------|
+| `GET /api/cron/jobs` | 列出所有任务 |
+| `POST /api/cron/jobs` | 创建任务 |
+| `GET /api/cron/jobs/:id` | 获取单个任务 |
+| `PUT /api/cron/jobs/:id` | 更新任务 |
+| `DELETE /api/cron/jobs/:id` | 删除任务 |
+| `POST /api/cron/jobs/:id/run` | 手动触发执行 |
+| `GET /api/cron/jobs/:id/logs` | 查看执行日志 |
+| `DELETE /api/cron/jobs/:id/logs` | 清空日志 |
+
 ## 核心模块
 
 ### 1. config.ts
@@ -72,6 +108,17 @@ docs/                      # 文档资料
 ### 4. runner/agent-runner.ts
 - `AgentRunner`: Agent 生命周期管理
 - `createAgentRunner()`: 工厂函数，一键创建并启动
+
+### 5. cron/ (Cron 定时任务)
+- `CronManager`: 高层管理器，组合存储/执行/调度
+- `CronJobStore`: 文件存储任务配置和执行日志
+- `CronExecutor`: 执行 bash 命令并捕获输出
+- `CronScheduler`: 使用 node-cron 注册/停止定时任务
+- 支持通过 Web API 和界面管理 cron 任务
+
+### 6. web/ (Web 界面)
+- `createWebServer()`: 创建 Hono 服务器
+- 内置 `/health` 健康检查和 `/cron` 管理页面
 
 ## 开发约定
 
