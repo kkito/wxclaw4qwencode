@@ -17,20 +17,26 @@
     "bind": "node dist/cli.js bind",
     "unbind": "node dist/cli.js unbind",
     "status": "node dist/cli.js status",
-    "start": "node dist/start.js"
+    "start": "node dist/start.js",
+    "web": "node dist/start-web.js",
+    "web:d": "node dist/start-web.js -- --detach"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "@types/node-cron": "^3.0.11",
     "typescript": "^5.7.3",
     "vitest": "^4.1.4"
   },
   "dependencies": {
     "@agentscope-ai/agentscope": "^0.0.2",
+    "@hono/node-server": "^2.0.0",
     "@tencent-weixin/openclaw-weixin": "^2.1.8",
     "@tencent-weixin/openclaw-weixin-cli": "^2.1.2",
+    "hono": "^4.12.15",
+    "node-cron": "^4.2.1",
     "zod": "^4.3.6"
   }
 }
