@@ -107,11 +107,11 @@ export class SkillsStore {
 
   /** 读取 Skill 目录下指定文件的内容 */
   getSkillFile(id: string, filename: string): string {
-    const filePath = path.join(this.getSkillDir(id), filename);
     const dir = this.getSkillDir(id);
+    const filePath = path.resolve(dir, filename);
 
     // 安全检查：防止路径遍历攻击
-    if (!filePath.startsWith(dir)) {
+    if (!filePath.startsWith(dir + path.sep) && filePath !== dir) {
       throw new Error('Invalid file path');
     }
 
@@ -181,9 +181,9 @@ export class SkillsStore {
       throw new Error('Use updateSkill to update SKILL.md');
     }
 
-    const filePath = path.join(dir, filename);
+    const filePath = path.resolve(dir, filename);
     // 安全检查
-    if (!filePath.startsWith(dir)) {
+    if (!filePath.startsWith(dir + path.sep) && filePath !== dir) {
       throw new Error('Invalid file path');
     }
 
@@ -201,8 +201,8 @@ export class SkillsStore {
       throw new Error('Cannot delete SKILL.md, use deleteSkill instead');
     }
 
-    const filePath = path.join(dir, filename);
-    if (!filePath.startsWith(dir)) {
+    const filePath = path.resolve(dir, filename);
+    if (!filePath.startsWith(dir + path.sep) && filePath !== dir) {
       throw new Error('Invalid file path');
     }
 
