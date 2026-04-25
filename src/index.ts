@@ -23,6 +23,9 @@ export { AgentRunner, AgentRunnerConfig, createAgentRunner } from './runner/agen
 // 重试工具
 export { withRetry, retryable, RetryOptions, RetryResult } from './utils/retry.js';
 
+// Web 服务器
+export { createWebServer, WebServerConfig, IndexPage } from './web/index.js';
+
 // AgentScope 类型（重新导出方便使用）
 export { Agent } from '@agentscope-ai/agentscope/agent';
 export { createMsg, Msg, TextBlock, ContentBlock } from '@agentscope-ai/agentscope/message';
