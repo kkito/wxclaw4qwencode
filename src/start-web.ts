@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { createWebServer, WebServerConfig } from './web/index.js';
 import { CronManager } from './cron/index.js';
+import { SkillsManager } from './skills/index.js';
 
 function resolveWebConfig(): WebServerConfig {
   return {
@@ -20,12 +21,19 @@ function startWebMain(): void {
   const cronManager = new CronManager();
   cronManager.initialize();
 
+  // 初始化 SkillsManager
+  const skillsManager = new SkillsManager();
+
+  const skillsCount = skillsManager.listSkills().length;
+
   console.log(`\n🚀 正在启动 OwnClaw Web 服务器...`);
   console.log(`🌐 地址: http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
   console.log(`📡 端口: ${config.port}`);
-  console.log(`🕐 Cron 任务: ${cronManager.scheduledCount} 个已调度\n`);
+  console.log(`🕐 Cron 任务: ${cronManager.scheduledCount} 个已调度`);
+  console.log(`🎯 Skills: ${skillsCount} 个已加载`);
+  console.log(`📂 Skills 目录: ~/.ownclaw/skills/\n`);
 
-  const { app, server } = createWebServer({ ...config, cronManager });
+  const { app, server } = createWebServer({ ...config, cronManager, skillsManager });
 
   const shutdown = (signal: string) => {
     console.log(`\n收到 ${signal}，正在关闭...`);
