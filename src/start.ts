@@ -25,6 +25,7 @@ import { loadConfig, Config } from './config.js';
 import { createLogger, LogLevel, Logger } from './logger.js';
 import { AgentRunner, createAgentRunner } from './runner/agent-runner.js';
 import { withRetry } from './utils/retry.js';
+import { SkillsManager } from './skills/index.js';
 
 // ============== 微信 API 相关 ==============
 
@@ -217,7 +218,14 @@ async function startMain(): Promise<void> {
   logger.info(`📡 模型: ${config.agentscope.model.modelName}`);
   logger.info(`🌐 API: ${config.agentscope.model.baseUrl}`);
   logger.info(`👤 微信: ${account.userId || account.token.substring(0, 10)}...`);
-  
+
+  // 创建 SkillsManager
+  const skillsManager = new SkillsManager();
+  const skillsCount = skillsManager.listSkills().length;
+  if (skillsCount > 0) {
+    logger.info(`🎯 Skills: ${skillsCount} 个已加载`);
+  }
+
   // 创建 AgentRunner
   let runner: AgentRunner;
   try {
@@ -229,6 +237,7 @@ async function startMain(): Promise<void> {
           await sendMessageLib(account.baseUrl!, account.token!, to, text);
         },
       },
+      skillsManager,
     });
   } catch (error) {
     logger.error('创建 AgentRunner 失败:', error);
