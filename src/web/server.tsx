@@ -4,11 +4,13 @@ import type { ServerType } from '@hono/node-server';
 import { IndexPage } from './views/index.js';
 import { CronPage } from './views/cron.js';
 import { CronManager, CreateJobInput, UpdateJobInput } from '../cron/index.js';
+import { SkillsManager, CreateSkillInput, UpdateSkillInput } from '../skills/index.js';
 
 export interface WebServerConfig {
   port: number;
   host?: string;
   cronManager?: CronManager;
+  skillsManager?: SkillsManager;
 }
 
 export function createWebServer(config: WebServerConfig): { app: Hono; server: ServerType } {
@@ -101,6 +103,114 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
     app.delete('/api/cron/jobs/:id/logs', (c) => {
       cron.clearLogs(c.req.param('id'));
       return c.json({ success: true });
+    });
+  }
+
+  // ===== Skills API 路由 =====
+  if (config.skillsManager) {
+    const skills = config.skillsManager;
+
+    // GET /api/skills - 列出所有 Skills
+    app.get('/api/skills', (c) => {
+      const skillList = skills.listSkills();
+      return c.json({ skills: skillList });
+    });
+
+    // POST /api/skills - 创建 Skill
+    app.post('/api/skills', async (c) => {
+      try {
+        const body = await c.req.json<CreateSkillInput>();
+        if (!body.id || !body.skillMd) {
+          return c.json({ error: 'id and skillMd are required' }, 400);
+        }
+        const skill = skills.createSkill(body.id, body.skillMd);
+        return c.json({ skill }, 201);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Invalid request';
+        return c.json({ error: message }, 400);
+      }
+    });
+
+    // GET /api/skills/:id - 获取 Skill 详情
+    app.get('/api/skills/:id', (c) => {
+      const skill = skills.getSkill(c.req.param('id'));
+      if (!skill) {
+        return c.json({ error: 'Skill not found' }, 404);
+      }
+      return c.json({ skill });
+    });
+
+    // PUT /api/skills/:id - 更新 Skill
+    app.put('/api/skills/:id', async (c) => {
+      try {
+        const body = await c.req.json<UpdateSkillInput>();
+        if (!body.skillMd) {
+          return c.json({ error: 'skillMd is required' }, 400);
+        }
+        const skill = skills.updateSkill(c.req.param('id'), body.skillMd);
+        return c.json({ skill });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Invalid request';
+        const isNotFound = error instanceof Error && error.message.includes('not found');
+        return c.json({ error: message }, isNotFound ? 404 : 400);
+      }
+    });
+
+    // DELETE /api/skills/:id - 删除 Skill
+    app.delete('/api/skills/:id', (c) => {
+      try {
+        skills.deleteSkill(c.req.param('id'));
+        return c.json({ success: true });
+      } catch (error: unknown) {
+        return c.json({ error: 'Skill not found' }, 404);
+      }
+    });
+
+    // GET /api/skills/:id/files - 列出文件
+    app.get('/api/skills/:id/files', (c) => {
+      try {
+        const files = skills.getSkillFiles(c.req.param('id'));
+        return c.json({ files });
+      } catch (error: unknown) {
+        return c.json({ error: 'Skill not found' }, 404);
+      }
+    });
+
+    // GET /api/skills/:id/files/:filename - 获取文件内容
+    app.get('/api/skills/:id/files/:filename', (c) => {
+      try {
+        const content = skills.getSkillFile(c.req.param('id'), c.req.param('filename'));
+        return c.json({ content });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Not found';
+        return c.json({ error: message }, 404);
+      }
+    });
+
+    // POST /api/skills/:id/files - 上传文件
+    app.post('/api/skills/:id/files', async (c) => {
+      try {
+        const body = await c.req.json<{ filename: string; content: string }>();
+        if (!body.filename || body.content === undefined) {
+          return c.json({ error: 'filename and content are required' }, 400);
+        }
+        skills.uploadFile(c.req.param('id'), body.filename, body.content);
+        return c.json({ success: true });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Invalid request';
+        return c.json({ error: message }, 400);
+      }
+    });
+
+    // DELETE /api/skills/:id/files/:filename - 删除文件
+    app.delete('/api/skills/:id/files/:filename', (c) => {
+      try {
+        skills.deleteFile(c.req.param('id'), c.req.param('filename'));
+        return c.json({ success: true });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Not found';
+        return c.json({ error: message }, 404);
+      }
     });
   }
 
