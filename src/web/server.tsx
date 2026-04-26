@@ -213,6 +213,21 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
         return c.json({ error: message }, 404);
       }
     });
+
+    // POST /api/skills/install - 从 GitHub 安装 Skills
+    app.post('/api/skills/install', async (c) => {
+      try {
+        const body = await c.req.json<{ repo: string; branch?: string }>();
+        if (!body.repo) {
+          return c.json({ error: 'repo is required (format: owner/repo)' }, 400);
+        }
+        const result = await skills.installFromGitHub(body.repo, body.branch);
+        return c.json(result, 201);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Invalid request';
+        return c.json({ error: message }, 400);
+      }
+    });
   }
 
   // 首页路由

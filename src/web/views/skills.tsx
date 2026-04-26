@@ -166,7 +166,10 @@ export const SkillsPage: FC = () => {
           </div>
           <div class="header">
             <h1>🎯 Skills 管理</h1>
-            <button class="btn btn-primary" onclick="showCreateModal()">+ 新建 Skill</button>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-success" onclick="showInstallModal()">📦 从 GitHub 安装</button>
+              <button class="btn btn-primary" onclick="showCreateModal()">+ 新建 Skill</button>
+            </div>
           </div>
 
           <div class="card">
@@ -234,6 +237,31 @@ export const SkillsPage: FC = () => {
               <button class="close-btn" onclick="closeFileContentModal()">&times;</button>
             </div>
             <pre id="file-content" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '60vh', overflow: 'auto' }}></pre>
+          </div>
+        </div>
+
+        {/* Install Modal */}
+        <div class="modal" id="install-modal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2>从 GitHub 安装 Skills</h2>
+              <button class="close-btn" onclick="closeInstallModal()">&times;</button>
+            </div>
+            <form id="install-form" onsubmit="handleInstall(event)">
+              <div class="form-group">
+                <label for="install-repo">GitHub 仓库地址（格式：owner/repo）</label>
+                <input type="text" id="install-repo" required placeholder="例如: anthropics/skills" />
+              </div>
+              <div class="form-group">
+                <label for="install-branch">分支名（可选）</label>
+                <input type="text" id="install-branch" placeholder="默认: main" />
+              </div>
+              <div id="install-result" style="display: none; margin-top: 1rem;"></div>
+              <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="button" class="btn btn-muted" onclick="closeInstallModal()">取消</button>
+                <button type="submit" class="btn btn-success" id="install-btn">安装</button>
+              </div>
+            </form>
           </div>
         </div>
 
@@ -410,6 +438,71 @@ export const SkillsPage: FC = () => {
                 const div = document.createElement('div');
                 div.textContent = str || '';
                 return div.innerHTML;
+              }
+
+              function showInstallModal() {
+                document.getElementById('install-repo').value = '';
+                document.getElementById('install-branch').value = '';
+                document.getElementById('install-result').style.display = 'none';
+                document.getElementById('install-btn').disabled = false;
+                document.getElementById('install-modal').classList.add('active');
+              }
+
+              function closeInstallModal() {
+                document.getElementById('install-modal').classList.remove('active');
+              }
+
+              async function handleInstall(e) {
+                e.preventDefault();
+                const repo = document.getElementById('install-repo').value.trim();
+                const branch = document.getElementById('install-branch').value.trim() || undefined;
+
+                const btn = document.getElementById('install-btn');
+                const resultDiv = document.getElementById('install-result');
+                btn.disabled = true;
+                btn.textContent = '安装中...';
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '<p>正在从 GitHub 下载...</p>';
+
+                try {
+                  const res = await fetch('/api/skills/install', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ repo, branch }),
+                  });
+
+                  const data = await res.json();
+
+                  if (!res.ok) {
+                    resultDiv.innerHTML = '<p style="color: hsl(var(--danger));">安装失败: ' + escapeHtml(data.error) + '</p>';
+                    btn.disabled = false;
+                    btn.textContent = '安装';
+                    return;
+                  }
+
+                  let html = '<div style="padding: 1rem; background: hsl(var(--success) / 0.1); border-radius: var(--radius);">';
+                  html += '<p style="color: hsl(var(--success)); font-weight: 600;">✅ 安装成功</p>';
+                  html += '<p>成功安装: ' + data.installed.length + ' 个 Skills</p>';
+                  if (data.installed.length > 0) {
+                    html += '<ul>' + data.installed.map(s => '<li><strong>' + escapeHtml(s.name || s.id) + '</strong> - ' + escapeHtml(s.description || '') + '</li>').join('') + '</ul>';
+                  }
+                  if (data.skipped.length > 0) {
+                    html += '<p style="color: hsl(var(--muted-foreground)); margin-top: 0.5rem;">跳过 (已存在): ' + data.skipped.join(', ') + '</p>';
+                  }
+                  html += '</div>';
+                  resultDiv.innerHTML = html;
+                  btn.textContent = '完成';
+
+                  // 延迟关闭并刷新列表
+                  setTimeout(() => {
+                    closeInstallModal();
+                    loadSkills();
+                  }, 2000);
+                } catch (err) {
+                  resultDiv.innerHTML = '<p style="color: hsl(var(--danger));">安装失败: ' + escapeHtml(err.message || '网络错误') + '</p>';
+                  btn.disabled = false;
+                  btn.textContent = '安装';
+                }
               }
 
               loadSkills();
