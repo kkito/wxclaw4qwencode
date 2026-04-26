@@ -2,9 +2,14 @@
 
 ## 任务列表
 
-### 1. 增加 Skill 功能
+### 1. ✅ 增加 Skill 功能（已完成）
 
-扩展项目的能力，提供更多可复用的技能模块。
+- 实现 SkillsManager 模块（types/schema/store/manager/index）
+- Web API CRUD（/api/skills/*）
+- Web 管理页面（/skills）
+- Agent 集成（Toolkit + skillDirs）
+- 启动脚本集成（start.ts + start-web.ts）
+- 示例 Skill（~/.ownclaw/skills/data-analyst/）
 
 ### 2. 增加 Chrome Job
 
@@ -15,6 +20,7 @@
 构建可视化界面，集中展示各类信息和操作入口。
 
 - ✅ 已完成 Cron 管理页面 (`/cron`)
+- ✅ 已完成 Skills 管理页面 (`/skills`)
 - ⏳ 待扩展: 主控制台、状态监控等
 
 ### 4. 斜杠命令扩展
