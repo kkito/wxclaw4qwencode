@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server';
 import type { ServerType } from '@hono/node-server';
 import { IndexPage } from './views/index.js';
 import { CronPage } from './views/cron.js';
+import { SkillsPage } from './views/skills.js';
 import { CronManager, CreateJobInput, UpdateJobInput } from '../cron/index.js';
 import { SkillsManager, CreateSkillInput, UpdateSkillInput } from '../skills/index.js';
 
@@ -222,6 +223,11 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
   // Cron 页面路由
   app.get('/cron', (c) => {
     return c.html(<CronPage />);
+  });
+
+  // Skills 页面路由
+  app.get('/skills', (c) => {
+    return c.html(<SkillsPage />);
   });
 
   // 启动服务器
