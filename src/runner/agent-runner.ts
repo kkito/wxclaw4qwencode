@@ -5,6 +5,7 @@ import { WeixinBridge } from '../bridge/weixin-bridge.js';
 import { loadConfig, Config } from '../config.js';
 import { createLogger, getGlobalLogger, Logger } from '../logger.js';
 import { SkillsManager } from '../skills/index.js';
+import { SlashCommandRegistry } from '../slash-command/index.js';
 
 export interface AgentRunnerConfig {
   model: CustomModelConfig;
@@ -14,6 +15,7 @@ export interface AgentRunnerConfig {
   };
   logger?: Logger;
   skillsManager?: SkillsManager;
+  slashRegistry?: SlashCommandRegistry;
 }
 
 export class AgentRunner {
@@ -51,6 +53,7 @@ export class AgentRunner {
       agent: this.agent,
       sendMessage: config.weixin.sendMessage,
       logger: this.logger,
+      slashRegistry: config.slashRegistry,
     });
   }
 

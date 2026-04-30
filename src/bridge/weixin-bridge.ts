@@ -1,6 +1,8 @@
 import { Agent } from '@agentscope-ai/agentscope/agent';
 import { createMsg, Msg, TextBlock, ContentBlock } from '@agentscope-ai/agentscope/message';
 import { getGlobalLogger, Logger } from '../logger.js';
+import { SlashCommandRegistry } from '../slash-command/index.js';
+import type { SlashCommandContext } from '../slash-command/types.js';
 
 /**
  * 微信消息类型 - 从 openclaw-weixin 包
@@ -40,17 +42,20 @@ export interface WeixinBridgeOptions {
   agent: Agent;
   sendMessage: (to: string, text: string) => Promise<void>;
   logger?: Logger;
+  slashRegistry?: SlashCommandRegistry;
 }
 
 export class WeixinBridge {
   private agent: Agent;
   private sendMessageFn: (to: string, text: string) => Promise<void>;
   private logger: Logger;
+  private slashRegistry: SlashCommandRegistry;
 
   constructor(options: WeixinBridgeOptions) {
     this.agent = options.agent;
     this.sendMessageFn = options.sendMessage;
     this.logger = options.logger || getGlobalLogger();
+    this.slashRegistry = options.slashRegistry || new SlashCommandRegistry();
   }
 
   async handleMessage(weixinMsg: WeixinMessage): Promise<void> {
@@ -65,6 +70,31 @@ export class WeixinBridge {
 
       // 日志打印用户发送的内容
       this.logger.info(`[用户消息] from ${userId}: ${text}`);
+
+      // === Slash command pre-intercept ===
+      if (text.startsWith('/')) {
+        const commandName = text.slice(1).split(/\s/)[0];
+        const command = this.slashRegistry.get(commandName);
+        if (command) {
+          const args = text.slice(1 + commandName.length).trim();
+          const sendMessage = async (reply: string) => {
+            await this.sendMessageFn(userId, reply);
+          };
+          const ctx: SlashCommandContext = {
+            userId,
+            text,
+            sendMessage,
+          };
+          try {
+            const result = await command.handler(args, ctx);
+            if (result.handled) return;
+          } catch (error) {
+            this.logger.error('斜杠命令执行失败:', error);
+            await this.sendMessageFn(userId, `命令执行失败: ${error instanceof Error ? error.message : String(error)}`);
+            return;
+          }
+        }
+      }
 
       // 先发送"已收到开始处理"提示
       await this.sendMessageFn(userId, '已收到，开始处理...');
@@ -102,6 +132,10 @@ export class WeixinBridge {
     }
   }
 
+  getSlashRegistry(): SlashCommandRegistry {
+    return this.slashRegistry;
+  }
+
   private convertToMsg(weixinMsg: WeixinMessage): Msg {
     const userId = weixinMsg.from_user_id || 'unknown';
     const text = this.extractText(weixinMsg);
@@ -121,7 +155,7 @@ export class WeixinBridge {
 
   private extractText(msg: WeixinMessage): string {
     const items = msg.item_list;
-    
+
     if (!items || items.length === 0) return '';
 
     for (const item of items) {
