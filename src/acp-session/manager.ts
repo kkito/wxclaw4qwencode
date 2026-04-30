@@ -113,13 +113,19 @@ export class AcpSessionManager {
     this.startTimeoutTimer(userId);
   }
 
-  checkTimeouts(): void {
+  async checkTimeouts(
+    onTimeout?: (userId: string, msg: string) => void | Promise<void>,
+  ): Promise<void> {
     const now = Date.now();
     for (const [userId, session] of this.sessions) {
       const elapsed = now - session.lastActivity.getTime();
       if (elapsed > this.options.timeoutMs) {
-        this.endSession(userId, async (msg) => {
-          console.log(`[ACP] ${userId}: ${msg}`);
+        await this.endSession(userId, async (msg) => {
+          if (onTimeout) {
+            await onTimeout(userId, msg);
+          } else {
+            console.log(`[ACP] ${userId}: ${msg}`);
+          }
         });
       }
     }

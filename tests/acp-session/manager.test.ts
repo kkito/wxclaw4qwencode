@@ -55,7 +55,9 @@ describe('AcpSessionManager', () => {
     expect(manager.hasActiveSession('user1')).toBe(true);
 
     vi.advanceTimersByTime(6000);
-    manager.checkTimeouts();
+    await manager.checkTimeouts(async (_userId, msg) => {
+      await sendMock(msg);
+    });
     expect(manager.hasActiveSession('user1')).toBe(false);
     expect(sendMock).toHaveBeenCalledWith(expect.stringContaining('已退出 ACP 模式'));
   });
@@ -65,7 +67,7 @@ describe('AcpSessionManager', () => {
     vi.advanceTimersByTime(4000);
     manager.updateActivity('user1');
     vi.advanceTimersByTime(4000);
-    manager.checkTimeouts();
+    await manager.checkTimeouts();
     expect(manager.hasActiveSession('user1')).toBe(true);
   });
 
@@ -74,7 +76,7 @@ describe('AcpSessionManager', () => {
     vi.advanceTimersByTime(4000);
     await manager.sendMessage('user1', 'hello', sendMock);
     vi.advanceTimersByTime(4000);
-    manager.checkTimeouts();
+    await manager.checkTimeouts();
     expect(manager.hasActiveSession('user1')).toBe(true);
   });
 
