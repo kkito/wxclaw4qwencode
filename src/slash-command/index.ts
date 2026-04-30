@@ -6,3 +6,5 @@ export type {
   SlashCommandHandler,
   RegisteredCommand,
 } from './types.js';
+export { SlashCommandRegistry } from './registry.js';
+export { SlashCommandLoader } from './loader.js';
