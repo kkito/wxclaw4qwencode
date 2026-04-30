@@ -1,75 +1,63 @@
 /**
- * ACP 客户端演示脚本
- * 交互式对话，流式输出 AI 回复，自动处理权限请求
+ * ACP 客户端脚本
  *
- * 使用方式:
+ * 交互模式（默认）：
  *   npx tsx scripts/acp-demo.ts
- *   npx tsx scripts/acp-demo.ts --model gpt-4o
- *   npx tsx scripts/acp-demo.ts --cwd /path/to/project
+ *
+ * 快速验证模式（发送一条消息后退出）：
+ *   npx tsx scripts/acp-demo.ts --message "你好"
+ *
+ * 选项：
+ *   --model <name>   指定模型
+ *   --cwd <path>     指定工作目录
+ *   --message <text> 非交互模式，发送单条消息后退出
  */
 
 import { createAcpClient } from '../src/acp/index.js';
 import { createInterface } from 'node:readline';
 
-// 解析命令行参数
-function parseArgs(): { model?: string; cwd: string } {
+interface CliArgs {
+  model?: string;
+  cwd: string;
+  message?: string;
+}
+
+function parseArgs(): CliArgs {
   const args = process.argv.slice(2);
-  let model: string | undefined;
-  let cwd = process.cwd();
+  const result: CliArgs = { cwd: process.cwd() };
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--model' && args[i + 1]) {
-      model = args[i + 1];
-      i++;
-    } else if (args[i] === '--cwd' && args[i + 1]) {
-      cwd = args[i + 1];
-      i++;
+    switch (args[i]) {
+      case '--model':
+        result.model = args[++i];
+        break;
+      case '--cwd':
+        result.cwd = args[++i];
+        break;
+      case '--message':
+        result.message = args[++i];
+        break;
     }
   }
 
-  return { model, cwd };
+  return result;
 }
 
-async function main(): Promise<void> {
-  const { model, cwd } = parseArgs();
-
-  console.error('╔═══════════════════════════════════════════════════════════╗');
-  console.error('║           ACP 客户端演示 - Qwen Code                     ║');
-  console.error('╚═══════════════════════════════════════════════════════════╝');
-  console.error('');
-  console.error(`[配置] 工作目录: ${cwd}`);
-  console.error(`[配置] 模型: ${model ?? '(默认)'}`);
-  console.error(`[配置] 权限: 自动同意`);
-  console.error('');
-  console.error('输入 "exit" 或 "quit" 结束对话');
-  console.error('');
-
-  // 创建 ACP 客户端
-  const client = createAcpClient({
-    cwd,
-    model,
-    autoApprove: true,
-  });
-
-  // 启动连接和会话
-  try {
-    await client.start();
-  } catch (error) {
-    console.error(`\n[错误] 连接失败: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
-
-  // 创建交互式 readline
+async function runInteractive(client: ReturnType<typeof createAcpClient>): Promise<void> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
-  const prompt = () => {
+  const ask = () => {
     rl.question('\n你: ', async (input) => {
       const trimmed = input.trim();
 
-      // 退出命令
+      if (!trimmed) {
+        ask();
+        return;
+      }
+
       if (trimmed.toLowerCase() === 'exit' || trimmed.toLowerCase() === 'quit') {
         console.error('\n[结束] 正在关闭连接...');
         await client.close();
@@ -77,34 +65,67 @@ async function main(): Promise<void> {
         return;
       }
 
-      // 空输入
-      if (!trimmed) {
-        prompt();
-        return;
-      }
-
-      // 发送消息
       try {
         await client.sendMessage(trimmed);
       } catch (error) {
-        console.error(`\n[错误] 发送失败: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`\n[错误] ${error instanceof Error ? error.message : String(error)}`);
       }
 
-      // 继续下一轮
-      prompt();
+      ask();
     });
   };
 
-  // 开始交互
-  prompt();
+  ask();
 
-  // 监听 readline 关闭
   rl.on('close', () => {
     console.error('\n[结束] 再见！');
   });
 }
 
-// 运行主函数
+async function runSingle(client: ReturnType<typeof createAcpClient>, message: string): Promise<void> {
+  await client.sendMessage(message);
+  await client.close();
+}
+
+async function main(): Promise<void> {
+  const { model, cwd, message } = parseArgs();
+  const isSingleMode = !!message;
+
+  if (!isSingleMode) {
+    console.error('╔═══════════════════════════════════════════════════════════╗');
+    console.error('║           ACP 客户端 - 交互式对话                        ║');
+    console.error('╚═══════════════════════════════════════════════════════════╝');
+  } else {
+    console.error('[ACP] 快速验证模式');
+  }
+
+  console.error(`[配置] 工作目录: ${cwd}`);
+  console.error(`[配置] 模型: ${model ?? '(默认)'}`);
+  console.error(`[配置] 权限: 自动同意`);
+  console.error('');
+
+  const client = createAcpClient({
+    cwd,
+    model,
+    autoApprove: true,
+  });
+
+  try {
+    await client.start();
+  } catch (error) {
+    console.error(`\n[错误] 连接失败: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+
+  if (isSingleMode) {
+    await runSingle(client, message);
+  } else {
+    console.error('输入 "exit" 或 "quit" 结束对话');
+    console.error('');
+    await runInteractive(client);
+  }
+}
+
 main().catch((error) => {
   console.error(`\n[致命错误] ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
