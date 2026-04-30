@@ -26,6 +26,9 @@ import { createLogger, LogLevel, Logger } from './logger.js';
 import { AgentRunner, createAgentRunner } from './runner/agent-runner.js';
 import { withRetry } from './utils/retry.js';
 import { SkillsManager } from './skills/index.js';
+import { SlashCommandLoader, SlashCommandRegistry } from './slash-command/index.js';
+import { AcpSessionManager } from './acp-session/index.js';
+import { setGlobalSessionManager } from './commands/acp/handler.js';
 
 // ============== 微信 API 相关 ==============
 
@@ -226,6 +229,23 @@ async function startMain(): Promise<void> {
     logger.info(`🎯 Skills: ${skillsCount} 个已加载`);
   }
 
+  // === 斜杠命令 + ACP 初始化 ===
+  const slashRegistry = new SlashCommandRegistry();
+  const stateDir = resolveStateDir();
+  const commandsDir = path.join(stateDir, 'commands');
+  const slashLoader = new SlashCommandLoader(commandsDir);
+  await slashLoader.loadCommands(slashRegistry);
+
+  if (slashRegistry.listNames().length > 0) {
+    logger.info(`📢 Slash Commands: ${slashRegistry.listNames().join(', ')} 已加载`);
+  }
+
+  const acpManager = new AcpSessionManager();
+  setGlobalSessionManager(acpManager);
+
+  // 定时检查 ACP 超时（每分钟）
+  const acpTimeoutCheck = setInterval(() => acpManager.checkTimeouts(), 60000);
+
   // 创建 AgentRunner
   let runner: AgentRunner;
   try {
@@ -238,6 +258,7 @@ async function startMain(): Promise<void> {
         },
       },
       skillsManager,
+      slashRegistry,
     });
   } catch (error) {
     logger.error('创建 AgentRunner 失败:', error);
@@ -326,6 +347,7 @@ async function startMain(): Promise<void> {
     logger.info(`收到 ${signal}，正在关闭...`);
     running = false;
     clearInterval(heartbeat);
+    clearInterval(acpTimeoutCheck);
     await runner.stop();
     logger.info('👋 已退出');
     process.exit(0);

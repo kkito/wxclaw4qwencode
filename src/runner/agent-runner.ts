@@ -77,6 +77,7 @@ export interface AgentRunnerOptions {
   };
   logger?: Logger;
   skillsManager?: SkillsManager;
+  slashRegistry?: SlashCommandRegistry;
 }
 
 export async function createAgentRunner(options: AgentRunnerOptions): Promise<AgentRunner> {
@@ -99,6 +100,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
     weixin: options.weixin,
     logger,
     skillsManager: options.skillsManager,
+    slashRegistry: options.slashRegistry,
   });
 
   await runner.start();
