@@ -3,12 +3,14 @@
  * 处理来自 ACP 服务端的请求：权限请求、会话更新、扩展通知
  */
 
-import type { Client, Agent, RequestPermissionRequest, RequestPermissionResponse, SessionNotification, PermissionOption, SelectedPermissionOutcome, ToolCall } from '@agentclientprotocol/sdk';
+import type { Client, Agent, RequestPermissionRequest, RequestPermissionResponse, SessionNotification, PermissionOption, SelectedPermissionOutcome, ToolCall, SessionUpdate } from '@agentclientprotocol/sdk';
 import { formatSessionUpdate } from './output.js';
 
 export interface HandlerOptions {
   /** 是否自动同意所有权限请求 */
   autoApprove?: boolean;
+  /** 会话更新回调 */
+  onSessionUpdate?: (update: SessionUpdate) => void;
 }
 
 /**
@@ -16,7 +18,7 @@ export interface HandlerOptions {
  * 返回一个 Client 对象，用于处理来自服务端（Agent 端）的请求
  */
 export function createClientHandler(options: HandlerOptions = {}): (agent: Agent) => Client {
-  const { autoApprove = true } = options;
+  const { autoApprove = true, onSessionUpdate } = options;
 
   return (_agent: Agent): Client => {
     return {
@@ -81,6 +83,9 @@ export function createClientHandler(options: HandlerOptions = {}): (agent: Agent
        */
       sessionUpdate: async (params: SessionNotification): Promise<void> => {
         formatSessionUpdate(params);
+        if (onSessionUpdate) {
+          onSessionUpdate(params.update);
+        }
       },
 
       /**

@@ -3,7 +3,7 @@
  * 高层封装，组合连接、处理器和输出格式化
  */
 
-import type { ClientSideConnection, PromptResponse, NewSessionResponse } from '@agentclientprotocol/sdk';
+import type { ClientSideConnection, PromptResponse, NewSessionResponse, SessionUpdate } from '@agentclientprotocol/sdk';
 import { AcpConnection } from './connection.js';
 import { createClientHandler } from './handlers.js';
 import { formatPromptResult, resetOutputState } from './output.js';
@@ -14,6 +14,7 @@ export class AcpClient {
   private acpConnection: ClientSideConnection | null = null;
   private sessionInfo: AcpSessionInfo | null = null;
   private options: AcpClientOptions;
+  private sessionUpdateCallback: ((update: SessionUpdate) => void) | null = null;
 
   constructor(options: AcpClientOptions) {
     this.options = options;
@@ -27,6 +28,7 @@ export class AcpClient {
     // 创建 Client 处理器
     const clientFactory = createClientHandler({
       autoApprove: this.options.autoApprove ?? true,
+      onSessionUpdate: this.sessionUpdateCallback ?? undefined,
     });
 
     // 启动连接
@@ -102,6 +104,14 @@ export class AcpClient {
    */
   getConnection(): ClientSideConnection | null {
     return this.acpConnection;
+  }
+
+  /**
+   * 设置会话更新回调
+   * 用于接收流式输出事件（文本、思考、工具调用等）
+   */
+  setSessionUpdateCallback(cb: (update: SessionUpdate) => void): void {
+    this.sessionUpdateCallback = cb;
   }
 
   /**
