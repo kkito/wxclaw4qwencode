@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 import { SlashCommandLoader } from '../../src/slash-command/loader.js';
 import { SlashCommandRegistry } from '../../src/slash-command/registry.js';
 
 describe('SlashCommandLoader', () => {
-  const testDir = '/tmp/ownclaw-test-commands';
+  let testDir: string;
 
   beforeEach(() => {
+    testDir = path.join(os.tmpdir(), `ownclaw-loader-test-${Date.now()}`);
     fs.mkdirSync(testDir, { recursive: true });
   });
 
   afterEach(() => {
-    fs.rmSync(testDir, { recursive: true, force: true });
+    if (fs.existsSync(testDir)) {
+      fs.rmSync(testDir, { recursive: true, force: true });
+    }
   });
 
   it('loads valid command directory', async () => {

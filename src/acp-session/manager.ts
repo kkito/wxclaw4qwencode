@@ -55,7 +55,9 @@ export class AcpSessionManager {
     });
 
     // 设置 sessionUpdate 回调，用于将 ACP 输出转发到微信
+    // ACP 服务端有数据返回时也视为活动，重置超时 timer
     client.setSessionUpdateCallback((update) => {
+      this.updateActivity(userId);
       output.onSessionUpdate(update, userId, sendToWeixin);
     });
 

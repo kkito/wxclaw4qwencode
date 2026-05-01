@@ -2,10 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AcpSessionManager } from '../../src/acp-session/manager.js';
 
 // Mock AcpClient - must be before imports
+let _lastMockClient: any = null;
+
 vi.mock('../../src/acp/client.js', () => ({
   AcpClient: class MockAcpClient {
     private _closed = false;
     private _sessionUpdateCallback: ((update: any) => void) | null = null;
+    constructor() {
+      _lastMockClient = this;
+    }
     async start() {}
     async sendMessage() {
       return { usage: { input_tokens: 100, output_tokens: 50 } };
@@ -18,6 +23,12 @@ vi.mock('../../src/acp/client.js', () => ({
     }
     setSessionUpdateCallback(cb: (update: any) => void) {
       this._sessionUpdateCallback = cb;
+    }
+    // Expose callback for testing server-side activity simulation
+    _triggerServerUpdate(update: any) {
+      if (this._sessionUpdateCallback) {
+        this._sessionUpdateCallback(update);
+      }
     }
   },
 }));
@@ -101,5 +112,23 @@ describe('AcpSessionManager', () => {
   it('endSession for non-existent session warns', async () => {
     await manager.endSession('nobody', sendMock);
     expect(sendMock).toHaveBeenCalledWith(expect.stringContaining('不在 ACP 模式中'));
+  });
+
+  it('server-side activity resets timeout (long-running tasks)', async () => {
+    await manager.createSession('user1', '/test', sendMock);
+    // Simulate ACP server sending data after 3 seconds (timeout is 5s)
+    vi.advanceTimersByTime(3000);
+    // Simulate long-running task: server sends data every 2 seconds
+    for (let i = 0; i < 3; i++) {
+      vi.advanceTimersByTime(2000);
+      _lastMockClient._triggerServerUpdate({
+        sessionUpdate: 'agent_message_chunk',
+        content: [{ text: `chunk ${i}` }],
+      });
+    }
+    // Total elapsed: 3000 + 2000*3 = 9000ms, well past the 5000ms timeout
+    // But server kept resetting activity, so session should still be alive
+    await manager.checkTimeouts();
+    expect(manager.hasActiveSession('user1')).toBe(true);
   });
 });
