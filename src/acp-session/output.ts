@@ -21,8 +21,6 @@ export class AcpWeixinOutput {
 
   onAgentMessageChunk(text: string, userId: string, sendMessage: (msg: string) => Promise<void>): void {
     if (!text) return;
-    // 过滤掉 qwen --acp 自行输出的工具调用提示文本
-    if (text.includes('正在调用')) return;
     const buf = this.getOrCreateBuffer(userId);
     buf.text += text;
     this.maybeFlush(buf, userId, sendMessage);
@@ -117,6 +115,11 @@ export class AcpWeixinOutput {
       buf.timer = null;
     }
     if (buf.text.length === 0) return;
+    // 统一出口过滤：完整文本中包含"正在调用"则丢弃，不发到微信
+    if (buf.text.includes('正在调用')) {
+      buf.text = '';
+      return;
+    }
     const msg = this.options.prefix + buf.text;
     sendMessage(msg);
     buf.text = '';
