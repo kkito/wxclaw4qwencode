@@ -61,6 +61,17 @@ describe('AcpWeixinOutput', () => {
     expect(sendMock).not.toHaveBeenCalled(); // 还没到阈值
   });
 
+  it('tool call clears buffer and discards accumulated text', () => {
+    output.onAgentMessageChunk('🔧 正在调用: call_xxx', 'user1', sendMock);
+    expect(sendMock).not.toHaveBeenCalled();
+
+    output.onToolCall({ name: 'call_xxx' }, 'user1', sendMock);
+
+    // buffer 被清空，后续 flush 也不会发送之前的文本
+    output.flush('user1', sendMock);
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
   it('onComplete flushes remaining text', () => {
     output.onAgentMessageChunk('final answer', 'user1', sendMock);
     output.onComplete('user1', sendMock);

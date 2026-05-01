@@ -34,6 +34,16 @@ export class AcpWeixinOutput {
     // 工具调用不再发送给微信用户
     // 只在终端日志中记录
     console.error(`\n🔧 [工具调用] ${toolCall.name}`);
+
+    // 清空 buffer，丢弃之前累积的"正在调用"等提示文本
+    const buf = this.buffers.get(userId);
+    if (buf) {
+      if (buf.timer) {
+        clearTimeout(buf.timer);
+        buf.timer = null;
+      }
+      buf.text = '';
+    }
   }
 
   onComplete(userId: string, sendMessage: (msg: string) => Promise<void>): void {
