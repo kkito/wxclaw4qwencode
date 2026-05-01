@@ -49,7 +49,7 @@ export class AcpSessionManager {
     }
 
     const output = new AcpWeixinOutput({
-      prefix: `[ACP 模式] 工作目录: ${cwd}\n---\n`,
+      prefix: `**🔮 ACP** › \`${cwd}\`\n\n`,
       flushIntervalMs: 3000,
       flushThresholdChars: 200,
     });
@@ -107,7 +107,7 @@ export class AcpSessionManager {
 
     this.updateActivity(userId);
     const result = await session.client.sendMessage(message);
-    
+
     // 显示 token 使用信息
     if (result.usage) {
       const usage = result.usage as Record<string, unknown>;
@@ -115,9 +115,14 @@ export class AcpSessionManager {
       const outputTokens = usage.output_tokens ?? 'N/A';
       await sendToWeixin(`\n📊 Token 使用:\n输入: ${inputTokens} tokens\n输出: ${outputTokens} tokens`);
     }
-    
+
     // Flush any remaining output after prompt completes
     session.output.flush(userId, sendToWeixin);
+
+    // 发送完成标识，标记大模型本轮回复已结束
+    if (result.stopReason) {
+      await sendToWeixin(`\n---\n✅ ACP 回复完成 (停止原因: ${result.stopReason})`);
+    }
   }
 
   updateActivity(userId: string): void {
