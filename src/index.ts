@@ -15,7 +15,7 @@ export {
 export { CustomModel, CustomModelConfig } from './model/custom-model.js';
 
 // 桥接器
-export { WeixinBridge, WeixinBridgeOptions } from './bridge/weixin-bridge.js';
+export { WeixinBridge, WeixinBridgeOptions, SendMessageOptions, MessageState, MessageStateType } from './bridge/weixin-bridge.js';
 
 // 运行器
 export { AgentRunner, AgentRunnerConfig, createAgentRunner } from './runner/agent-runner.js';

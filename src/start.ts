@@ -31,6 +31,7 @@ import { SlashCommandLoader, SlashCommandRegistry } from './slash-command/index.
 import { AcpSessionManager } from './acp-session/index.js';
 import { setGlobalSessionManager } from './commands/acp/handler.js';
 import createAcpHandler from './commands/acp/handler.js';
+import createStreamingHandler from './commands/streaming/handler.js';
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url);
@@ -292,6 +293,17 @@ handler: ./handler.js
     handler: createAcpHandler(acpManager),
     dirPath: path.join(__dirname, 'commands', 'acp'),
   });
+
+  // 手动注册 /streaming 命令（流式发送 demo）
+  if (account.baseUrl && account.token) {
+    slashRegistry.register('streaming', {
+      name: 'streaming',
+      description: '流式发送 Demo，演示 message_state 的 GENERATING → FINISH 流程',
+      usage: '/streaming',
+      handler: createStreamingHandler({ baseUrl: account.baseUrl, token: account.token }),
+      dirPath: path.join(__dirname, 'commands', 'streaming'),
+    });
+  }
 
   if (slashRegistry.listNames().length > 0) {
     logger.info(`📢 Slash Commands: ${slashRegistry.listNames().join(', ')} 已加载`);

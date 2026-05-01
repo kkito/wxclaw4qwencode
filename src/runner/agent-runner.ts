@@ -1,7 +1,7 @@
 import { Agent } from '@agentscope-ai/agentscope/agent';
 import { Toolkit } from '@agentscope-ai/agentscope/tool';
 import { CustomModel, CustomModelConfig } from '../model/custom-model.js';
-import { WeixinBridge } from '../bridge/weixin-bridge.js';
+import { WeixinBridge, SendMessageOptions } from '../bridge/weixin-bridge.js';
 import { loadConfig, Config } from '../config.js';
 import { createLogger, getGlobalLogger, Logger } from '../logger.js';
 import { SkillsManager } from '../skills/index.js';
@@ -13,6 +13,7 @@ export interface AgentRunnerConfig {
   sysPrompt: string;
   weixin: {
     sendMessage: (to: string, text: string) => Promise<void>;
+    sendMessageWithOptions?: (to: string, text: string, opts: SendMessageOptions) => Promise<void>;
   };
   logger?: Logger;
   skillsManager?: SkillsManager;
@@ -54,6 +55,7 @@ export class AgentRunner {
     this.bridge = new WeixinBridge({
       agent: this.agent,
       sendMessage: config.weixin.sendMessage,
+      sendMessageWithOptions: config.weixin.sendMessageWithOptions,
       logger: this.logger,
       slashRegistry: config.slashRegistry,
       acpManager: config.acpManager,
@@ -77,6 +79,7 @@ export interface AgentRunnerOptions {
   config?: Config;
   weixin: {
     sendMessage: (to: string, text: string) => Promise<void>;
+    sendMessageWithOptions?: (to: string, text: string, opts: SendMessageOptions) => Promise<void>;
   };
   logger?: Logger;
   skillsManager?: SkillsManager;

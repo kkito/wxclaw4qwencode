@@ -5,6 +5,7 @@ export type {
   SlashCommandContext,
   SlashCommandHandler,
   RegisteredCommand,
+  SendMessageOptions,
 } from './types.js';
 export { SlashCommandRegistry } from './registry.js';
 export { SlashCommandLoader } from './loader.js';

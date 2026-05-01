@@ -5,10 +5,15 @@ export interface SlashCommandResult {
   reply?: string;
 }
 
+export interface SendMessageOptions {
+  messageState?: number;
+}
+
 export interface SlashCommandContext {
   userId: string;
   text: string;
   sendMessage: (text: string) => Promise<void>;
+  sendMessageWithOptions?: (text: string, opts: SendMessageOptions) => Promise<void>;
 }
 
 export type SlashCommandHandler = (

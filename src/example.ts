@@ -1,4 +1,4 @@
-import { createAgentRunner, createLogger, LogLevel } from './index';
+import { createAgentRunner, createLogger, LogLevel, SendMessageOptions, MessageState } from './index';
 
 /**
  * 使用示例
@@ -31,6 +31,13 @@ async function main() {
         // import { sendMessageWeixin } from '@tencent-weixin/openclaw-weixin';
         // await sendMessageWeixin({ to, text });
         logger.info(`[发送消息] to: ${to}, text: ${text}`);
+      },
+      // 可选：支持带 message_state 的发送，用于流式 Demo
+      sendMessageWithOptions: async (to: string, text: string, opts: SendMessageOptions) => {
+        // import { sendMessage, MessageState } from '@tencent-weixin/openclaw-weixin';
+        // 实际使用时需要构建自定义 SendMessageReq 并调用 sendMessage API
+        const stateLabel = opts.messageState === MessageState.GENERATING ? 'GENERATING' : 'FINISH';
+        logger.info(`[发送消息(${stateLabel})] to: ${to}, text: ${text}`);
       },
     },
   });

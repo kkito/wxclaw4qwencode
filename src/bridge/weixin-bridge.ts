@@ -39,9 +39,23 @@ const MessageItemType = {
   VIDEO: 5,
 } as const;
 
+/** 消息状态，对应微信 message_state 字段 */
+export const MessageState = {
+  NEW: 0,
+  GENERATING: 1,
+  FINISH: 2,
+} as const;
+
+export type MessageStateType = typeof MessageState[keyof typeof MessageState];
+
+export interface SendMessageOptions {
+  messageState?: MessageStateType;
+}
+
 export interface WeixinBridgeOptions {
   agent: Agent;
   sendMessage: (to: string, text: string) => Promise<void>;
+  sendMessageWithOptions?: (to: string, text: string, opts: SendMessageOptions) => Promise<void>;
   logger?: Logger;
   slashRegistry?: SlashCommandRegistry;
   acpManager?: AcpSessionManager;
@@ -50,6 +64,7 @@ export interface WeixinBridgeOptions {
 export class WeixinBridge {
   private agent: Agent;
   private sendMessageFn: (to: string, text: string) => Promise<void>;
+  private sendMessageWithOptionsFn: (to: string, text: string, opts: SendMessageOptions) => Promise<void>;
   private logger: Logger;
   private slashRegistry: SlashCommandRegistry;
   private acpManager: AcpSessionManager | null;
@@ -57,10 +72,19 @@ export class WeixinBridge {
   constructor(options: WeixinBridgeOptions) {
     this.agent = options.agent;
     this.sendMessageFn = options.sendMessage;
+    this.sendMessageWithOptionsFn = options.sendMessageWithOptions || this.defaultSendMessageWithOptions;
     this.logger = options.logger || getGlobalLogger();
     this.slashRegistry = options.slashRegistry || new SlashCommandRegistry();
     this.acpManager = options.acpManager || null;
   }
+
+  private defaultSendMessageWithOptions = async (
+    to: string,
+    text: string,
+    _opts: SendMessageOptions,
+  ): Promise<void> => {
+    await this.sendMessageFn(to, text);
+  };
 
   async handleMessage(weixinMsg: WeixinMessage): Promise<void> {
     const userId = weixinMsg.from_user_id;
@@ -101,10 +125,19 @@ export class WeixinBridge {
           const sendMessage = async (reply: string) => {
             await this.sendMessageFn(userId, reply);
           };
+          const sendMessageWithOptions = async (
+            reply: string,
+            opts: import('../slash-command/types.js').SendMessageOptions,
+          ) => {
+            await this.sendMessageWithOptionsFn(userId, reply, {
+              messageState: opts.messageState as MessageStateType | undefined,
+            });
+          };
           const ctx: SlashCommandContext = {
             userId,
             text,
             sendMessage,
+            sendMessageWithOptions,
           };
           try {
             const result = await command.handler(args, ctx);
@@ -155,6 +188,18 @@ export class WeixinBridge {
 
   getSlashRegistry(): SlashCommandRegistry {
     return this.slashRegistry;
+  }
+
+  /**
+   * 发送消息，支持自定义 message_state
+   * 用于流式发送 demo：GENERATING → GENERATING → ... → FINISH
+   */
+  async sendMessageWithOptions(
+    to: string,
+    text: string,
+    opts?: SendMessageOptions,
+  ): Promise<void> {
+    await this.sendMessageWithOptionsFn(to, text, opts || {});
   }
 
   private convertToMsg(weixinMsg: WeixinMessage): Msg {

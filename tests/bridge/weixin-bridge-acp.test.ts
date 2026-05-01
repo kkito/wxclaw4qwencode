@@ -37,6 +37,7 @@ describe('WeixinBridge slash command routing', () => {
       userId: 'user1',
       text: '/test arg1',
       sendMessage: expect.any(Function),
+      sendMessageWithOptions: expect.any(Function),
     });
   });
 
