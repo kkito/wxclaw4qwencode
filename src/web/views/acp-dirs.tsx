@@ -1,9 +1,11 @@
 import type { FC } from 'hono/jsx';
 import { Hono } from 'hono';
 import { loadAcpProjectDirs, saveAcpProjectDirs } from '../../acp-config/store.js';
+import { scanProjectDirs } from '../../acp-config/scanner.js';
 
 interface AcpDirsPageProps {
   dirs: string[];
+  projects: Array<{ index: number; name: string; path: string }>;
   success?: boolean;
 }
 
@@ -136,6 +138,30 @@ const AcpDirsPage: FC<AcpDirsPageProps> = (props) => {
               <button type="submit" class="btn btn-primary">保存</button>
             </form>
           </div>
+
+          {props.projects.length > 0 && (
+            <div class="card">
+              <h2 style={{ 'font-size': '1.25rem', 'margin-bottom': '1rem' }}>
+                可访问项目（{props.projects.length} 个）
+              </h2>
+              <table style={{ 'width': '100%', 'border-collapse': 'collapse', 'font-size': '0.875rem' }}>
+                <thead>
+                  <tr style={{ 'border-bottom': '1px solid hsl(var(--border))', 'text-align': 'left' }}>
+                    <th style={{ 'padding': '0.5rem', 'font-weight': '600' }}>序号</th>
+                    <th style={{ 'padding': '0.5rem', 'font-weight': '600' }}>项目路径</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {props.projects.map((p) => (
+                    <tr style={{ 'border-bottom': '1px solid hsl(var(--border))' }}>
+                      <td style={{ 'padding': '0.5rem', 'color': 'hsl(var(--muted-foreground))' }}>{p.index}</td>
+                      <td style={{ 'padding': '0.5rem', 'font-family': 'monospace' }}>{p.path}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </body>
     </html>
@@ -147,8 +173,14 @@ export function createAcpDirsRouter() {
 
   app.get('/', async (c) => {
     const dirs = await loadAcpProjectDirs();
+    const scanned = await scanProjectDirs(dirs);
+    const projects = scanned.map((d) => ({
+      index: d.index,
+      name: d.name,
+      path: d.path,
+    }));
     const saved = c.req.query('saved') === '1';
-    return c.html(<AcpDirsPage dirs={dirs} success={saved} />);
+    return c.html(<AcpDirsPage dirs={dirs} projects={projects} success={saved} />);
   });
 
   app.post('/', async (c) => {

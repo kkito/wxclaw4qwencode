@@ -76,7 +76,7 @@ async function handleScan(context: SlashCommandContext): Promise<void> {
     return;
   }
 
-  const lines = scanned.map((d) => `${d.index}. ${d.name} (${d.root})`);
+  const lines = scanned.map((d) => `${d.index}. ${d.path}`);
   await context.sendMessage('可选项目：\n' + lines.join('\n') + '\n\n发送 /acp <序号> 进入对应项目');
 }
 
