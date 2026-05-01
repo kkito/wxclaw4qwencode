@@ -229,6 +229,21 @@ pnpm run test        # 运行测试
 pnpm run typecheck   # 类型检查
 ```
 
+## 测试
+
+OwnClaw 包含三层测试体系，详见 [测试指南](docs/testing.md)：
+
+| 层次 | 位置 | 说明 |
+|---|---|---|
+| 单元测试 | `tests/` 下各模块 | 测单个函数/类，mock 所有依赖 |
+| Web 路由测试 | `tests/web/*.test.ts` | 通过 `app.request()` 测完整 Hono 应用（页面+API） |
+| TSX 组件测试 | `tests/web/index.test.ts` | 直接 `jsx()` 渲染单个组件 |
+
+```bash
+pnpm run test:run      # 运行全部 259 个用例
+npx vitest run tests/web/  # 只运行 Web 相关测试
+```
+
 ## 依赖
 
 - `@agentscope-ai/agentscope` — AI Agent 框架

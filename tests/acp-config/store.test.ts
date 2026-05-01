@@ -38,6 +38,7 @@ describe('acp-config store', () => {
   });
 
   it('saves acpProjectDirs to config.json', async () => {
+    vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
     const mkdirSpy = vi.mocked(fs.mkdir).mockResolvedValue(undefined);
     const writeSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
 
@@ -47,6 +48,25 @@ describe('acp-config store', () => {
     expect(writeSpy).toHaveBeenCalledWith(
       '/tmp/test-ownclaw/config.json',
       JSON.stringify({ acpProjectDirs: ['/x', '/y'] }, null, 2),
+      'utf-8',
+    );
+  });
+
+  it('preserves other config fields when saving acpProjectDirs', async () => {
+    vi.mocked(fs.readFile).mockResolvedValueOnce(
+      JSON.stringify({ sendThrottleIntervalMs: 3000 }),
+    );
+    const writeSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    await saveAcpProjectDirs(['/proj1']);
+
+    expect(writeSpy).toHaveBeenCalledWith(
+      '/tmp/test-ownclaw/config.json',
+      JSON.stringify(
+        { sendThrottleIntervalMs: 3000, acpProjectDirs: ['/proj1'] },
+        null,
+        2,
+      ),
       'utf-8',
     );
   });

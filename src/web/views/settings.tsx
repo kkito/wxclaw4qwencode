@@ -136,6 +136,14 @@ const SettingsPage: FC<SettingsPageProps> = (props) => {
               <button type="submit" class="btn btn-primary">保存</button>
             </form>
           </div>
+
+          <div class="card">
+            <h2 style={{ 'font-size': '1.25rem', 'margin-bottom': '1rem' }}>ACP 模式</h2>
+            <p style={{ 'font-size': '0.875rem', 'color': 'hsl(var(--muted-foreground))', 'margin-bottom': '0.75rem' }}>
+              配置 ACP 模式的根目录列表，用于 <code style={{ 'background': 'hsl(var(--muted))', 'padding': '0.125rem 0.375rem', 'border-radius': 'var(--radius)' }}>/acp</code> 命令扫描项目。
+            </p>
+            <a href="/settings/acp-dirs" class="btn btn-primary" style={{ 'text-decoration': 'none', 'display': 'inline-block' }}>配置 ACP 目录</a>
+          </div>
         </div>
       </body>
     </html>
