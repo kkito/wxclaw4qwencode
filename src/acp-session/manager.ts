@@ -54,6 +54,11 @@ export class AcpSessionManager {
       flushThresholdChars: 200,
     });
 
+    // 设置 sessionUpdate 回调，用于将 ACP 输出转发到微信
+    client.setSessionUpdateCallback((update) => {
+      output.onSessionUpdate(update, userId, sendToWeixin);
+    });
+
     const session: ActiveSession = {
       client,
       cwd,
@@ -101,7 +106,16 @@ export class AcpSessionManager {
     }
 
     this.updateActivity(userId);
-    await session.client.sendMessage(message);
+    const result = await session.client.sendMessage(message);
+    
+    // 显示 token 使用信息
+    if (result.usage) {
+      const usage = result.usage as Record<string, unknown>;
+      const inputTokens = usage.input_tokens ?? 'N/A';
+      const outputTokens = usage.output_tokens ?? 'N/A';
+      await sendToWeixin(`\n📊 Token 使用:\n输入: ${inputTokens} tokens\n输出: ${outputTokens} tokens`);
+    }
+    
     // Flush any remaining output after prompt completes
     session.output.flush(userId, sendToWeixin);
   }

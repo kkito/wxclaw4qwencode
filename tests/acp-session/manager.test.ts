@@ -5,13 +5,19 @@ import { AcpSessionManager } from '../../src/acp-session/manager.js';
 vi.mock('../../src/acp/client.js', () => ({
   AcpClient: class MockAcpClient {
     private _closed = false;
+    private _sessionUpdateCallback: ((update: any) => void) | null = null;
     async start() {}
-    async sendMessage() {}
+    async sendMessage() {
+      return { usage: { input_tokens: 100, output_tokens: 50 } };
+    }
     async close() {
       this._closed = true;
     }
     getSessionInfo() {
       return { sessionId: 'mock', cwd: '/test' };
+    }
+    setSessionUpdateCallback(cb: (update: any) => void) {
+      this._sessionUpdateCallback = cb;
     }
   },
 }));

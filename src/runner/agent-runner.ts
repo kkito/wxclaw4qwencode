@@ -6,6 +6,7 @@ import { loadConfig, Config } from '../config.js';
 import { createLogger, getGlobalLogger, Logger } from '../logger.js';
 import { SkillsManager } from '../skills/index.js';
 import { SlashCommandRegistry } from '../slash-command/index.js';
+import type { AcpSessionManager } from '../acp-session/manager.js';
 
 export interface AgentRunnerConfig {
   model: CustomModelConfig;
@@ -16,6 +17,7 @@ export interface AgentRunnerConfig {
   logger?: Logger;
   skillsManager?: SkillsManager;
   slashRegistry?: SlashCommandRegistry;
+  acpManager?: AcpSessionManager;
 }
 
 export class AgentRunner {
@@ -54,6 +56,7 @@ export class AgentRunner {
       sendMessage: config.weixin.sendMessage,
       logger: this.logger,
       slashRegistry: config.slashRegistry,
+      acpManager: config.acpManager,
     });
   }
 
@@ -78,6 +81,7 @@ export interface AgentRunnerOptions {
   logger?: Logger;
   skillsManager?: SkillsManager;
   slashRegistry?: SlashCommandRegistry;
+  acpManager?: AcpSessionManager;
 }
 
 export async function createAgentRunner(options: AgentRunnerOptions): Promise<AgentRunner> {
@@ -101,6 +105,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
     logger,
     skillsManager: options.skillsManager,
     slashRegistry: options.slashRegistry,
+    acpManager: options.acpManager,
   });
 
   await runner.start();

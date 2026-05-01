@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { loadConfig, Config } from './config.js';
 import { createLogger, LogLevel, Logger } from './logger.js';
 import { AgentRunner, createAgentRunner } from './runner/agent-runner.js';
@@ -29,6 +30,11 @@ import { SkillsManager } from './skills/index.js';
 import { SlashCommandLoader, SlashCommandRegistry } from './slash-command/index.js';
 import { AcpSessionManager } from './acp-session/index.js';
 import { setGlobalSessionManager } from './commands/acp/handler.js';
+import createAcpHandler from './commands/acp/handler.js';
+
+// ESM __dirname polyfill
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ============== 微信 API 相关 ==============
 
@@ -233,15 +239,63 @@ async function startMain(): Promise<void> {
   const slashRegistry = new SlashCommandRegistry();
   const stateDir = resolveStateDir();
   const commandsDir = path.join(stateDir, 'commands');
+
+  // 初始化内置命令
+  const builtinCommands = [
+    {
+      name: 'echo',
+      description: '回显消息，直接返回 /echo 后面的内容',
+      usage: '/echo <内容>',
+      handler: 'async (args, ctx) => { await ctx.sendMessage(args || "用法: /echo <内容>"); return { handled: true }; }',
+    },
+  ];
+
+  for (const cmd of builtinCommands) {
+    const cmdDir = path.join(commandsDir, cmd.name);
+    const manifestPath = path.join(cmdDir, 'COMMAND.md');
+    const handlerPath = path.join(cmdDir, 'handler.js');
+
+    if (!fs.existsSync(cmdDir)) {
+      fs.mkdirSync(cmdDir, { recursive: true });
+    }
+
+    if (!fs.existsSync(manifestPath)) {
+      const manifest = `---
+name: ${cmd.name}
+description: ${cmd.description}
+usage: ${cmd.usage}
+handler: ./handler.js
+---
+`;
+      fs.writeFileSync(manifestPath, manifest);
+    }
+
+    if (!fs.existsSync(handlerPath)) {
+      // 创建简单的 handler 文件
+      const handlerCode = `export default ${cmd.handler};\n`;
+      fs.writeFileSync(handlerPath, handlerCode);
+    }
+
+    logger.info(`📦 初始化内置命令: ${cmd.name}`);
+  }
+
   const slashLoader = new SlashCommandLoader(commandsDir);
   await slashLoader.loadCommands(slashRegistry);
+
+  // 手动注册 /acp 命令（需要注入 sessionManager）
+  const acpManager = new AcpSessionManager();
+  setGlobalSessionManager(acpManager);
+  slashRegistry.register('acp', {
+    name: 'acp',
+    description: '进入 ACP (Agent Client Protocol) 模式',
+    usage: '/acp <项目路径>',
+    handler: createAcpHandler(acpManager),
+    dirPath: path.join(__dirname, 'commands', 'acp'),
+  });
 
   if (slashRegistry.listNames().length > 0) {
     logger.info(`📢 Slash Commands: ${slashRegistry.listNames().join(', ')} 已加载`);
   }
-
-  const acpManager = new AcpSessionManager();
-  setGlobalSessionManager(acpManager);
 
   // 定时检查 ACP 超时（每分钟）
   const acpTimeoutCheck = setInterval(() => acpManager.checkTimeouts(), 60000);
@@ -259,6 +313,7 @@ async function startMain(): Promise<void> {
       },
       skillsManager,
       slashRegistry,
+      acpManager,
     });
   } catch (error) {
     logger.error('创建 AgentRunner 失败:', error);

@@ -54,12 +54,11 @@ describe('AcpWeixinOutput', () => {
     expect(sendMock).toHaveBeenNthCalledWith(2, expect.stringContaining('msg2'));
   });
 
-  it('tool call flushes buffer and sends tool hint', () => {
+  it('tool call does not send to wechat (only logs to console)', () => {
     output.onAgentMessageChunk('some text', 'user1', sendMock);
     output.onToolCall({ name: 'read_file' }, 'user1', sendMock);
-    expect(sendMock).toHaveBeenCalledTimes(2);
-    expect(sendMock.mock.calls[0][0]).toContain('some text');
-    expect(sendMock.mock.calls[1][0]).toContain('read_file');
+    // 工具调用不发送给微信用户,所以只发送了一次(消息内容)
+    expect(sendMock).not.toHaveBeenCalled(); // 还没到阈值
   });
 
   it('onComplete flushes remaining text', () => {

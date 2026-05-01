@@ -3,6 +3,7 @@ import { createMsg, Msg, TextBlock, ContentBlock } from '@agentscope-ai/agentsco
 import { getGlobalLogger, Logger } from '../logger.js';
 import { SlashCommandRegistry } from '../slash-command/index.js';
 import type { SlashCommandContext } from '../slash-command/types.js';
+import type { AcpSessionManager } from '../acp-session/manager.js';
 
 /**
  * 微信消息类型 - 从 openclaw-weixin 包
@@ -43,6 +44,7 @@ export interface WeixinBridgeOptions {
   sendMessage: (to: string, text: string) => Promise<void>;
   logger?: Logger;
   slashRegistry?: SlashCommandRegistry;
+  acpManager?: AcpSessionManager;
 }
 
 export class WeixinBridge {
@@ -50,12 +52,14 @@ export class WeixinBridge {
   private sendMessageFn: (to: string, text: string) => Promise<void>;
   private logger: Logger;
   private slashRegistry: SlashCommandRegistry;
+  private acpManager: AcpSessionManager | null;
 
   constructor(options: WeixinBridgeOptions) {
     this.agent = options.agent;
     this.sendMessageFn = options.sendMessage;
     this.logger = options.logger || getGlobalLogger();
     this.slashRegistry = options.slashRegistry || new SlashCommandRegistry();
+    this.acpManager = options.acpManager || null;
   }
 
   async handleMessage(weixinMsg: WeixinMessage): Promise<void> {
@@ -70,6 +74,23 @@ export class WeixinBridge {
 
       // 日志打印用户发送的内容
       this.logger.info(`[用户消息] from ${userId}: ${text}`);
+
+      // === ACP 模式消息路由 ===
+      if (this.acpManager?.hasActiveSession(userId)) {
+        // 检查是否是 exit 命令
+        if (text.toLowerCase() === 'exit') {
+          await this.acpManager.endSession(userId, async (msg) => {
+            await this.sendMessageFn(userId, msg);
+          });
+          return;
+        }
+
+        // 路由到 ACP
+        await this.acpManager.sendMessage(userId, text, async (msg) => {
+          await this.sendMessageFn(userId, msg);
+        });
+        return;
+      }
 
       // === Slash command pre-intercept ===
       if (text.startsWith('/')) {

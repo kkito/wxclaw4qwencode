@@ -6,7 +6,7 @@ describe('AcpClient streaming callback', () => {
     const client = new AcpClient({ cwd: '/tmp', autoApprove: true });
     const cb = vi.fn();
     client.setSessionUpdateCallback(cb);
-    // Verify no crash - the callback is stored internally
-    expect(typeof client['sessionUpdateCallback']).toBe('function');
+    // Verify no crash - the callback is stored in the ref object
+    expect(typeof client['sessionUpdateRef'].cb).toBe('function');
   });
 });

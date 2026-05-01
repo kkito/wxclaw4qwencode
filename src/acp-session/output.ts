@@ -31,11 +31,9 @@ export class AcpWeixinOutput {
   }
 
   onToolCall(toolCall: { name: string }, userId: string, sendMessage: (msg: string) => Promise<void>): void {
-    const buf = this.getOrCreateBuffer(userId);
-    if (buf.text.length > 0) {
-      this.flushBuffer(buf, userId, sendMessage);
-    }
-    sendMessage(`${this.options.prefix}\n🔧 正在调用: ${toolCall.name}`);
+    // 工具调用不再发送给微信用户
+    // 只在终端日志中记录
+    console.error(`\n🔧 [工具调用] ${toolCall.name}`);
   }
 
   onComplete(userId: string, sendMessage: (msg: string) => Promise<void>): void {
