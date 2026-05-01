@@ -5,8 +5,10 @@ import { IndexPage } from './views/index.js';
 import { CronPage } from './views/cron.js';
 import { SkillsPage } from './views/skills.js';
 import { createSettingsRouter } from './views/settings.js';
+import { createAcpDirsRouter } from './views/acp-dirs.js';
 import { CronManager, CreateJobInput, UpdateJobInput } from '../cron/index.js';
 import { SkillsManager, CreateSkillInput, UpdateSkillInput } from '../skills/index.js';
+import { loadAcpProjectDirs, saveAcpProjectDirs } from '../acp-config/store.js';
 
 export interface WebServerConfig {
   port: number;
@@ -230,6 +232,28 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
       }
     });
   }
+
+  // ===== ACP Dirs API 路由 =====
+  app.get('/api/acp/dirs', async (c) => {
+    const dirs = await loadAcpProjectDirs();
+    return c.json({ dirs });
+  });
+
+  app.put('/api/acp/dirs', async (c) => {
+    try {
+      const body = await c.req.json<{ dirs: string[] }>();
+      if (!Array.isArray(body.dirs)) {
+        return c.json({ error: 'dirs must be an array' }, 400);
+      }
+      await saveAcpProjectDirs(body.dirs);
+      return c.json({ dirs: body.dirs });
+    } catch (error: unknown) {
+      return c.json({ error: 'Invalid request' }, 400);
+    }
+  });
+
+  // ===== ACP Dirs Settings Page =====
+  app.route('/settings/acp-dirs', createAcpDirsRouter());
 
   // 首页路由
   app.get('/', (c) => {
