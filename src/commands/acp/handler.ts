@@ -1,5 +1,8 @@
 import * as fs from 'node:fs';
 import type { SlashCommandHandler, SlashCommandContext } from '../../slash-command/types.js';
+import { loadAcpProjectDirs } from '../../acp-config/store.js';
+import { scanProjectDirs } from '../../acp-config/scanner.js';
+import { selectProjectByIndex } from '../../acp-config/selector.js';
 
 interface FsDeps {
   existsSync: typeof fs.existsSync;
@@ -10,6 +13,17 @@ const defaultFs: FsDeps = {
   existsSync: fs.existsSync.bind(fs),
   statSync: fs.statSync.bind(fs),
 };
+
+/** Global sessionManager reference (set by start.ts on init) */
+let _globalManager: import('../../acp-session/manager.js').AcpSessionManager | null = null;
+
+export function getGlobalSessionManager() {
+  return _globalManager;
+}
+
+export function setGlobalSessionManager(mgr: import('../../acp-session/manager.js').AcpSessionManager) {
+  _globalManager = mgr;
+}
 
 /**
  * Create /acp command handler
@@ -31,43 +45,89 @@ export default function createAcpHandler(
       return { handled: true };
     }
 
-    // No path provided
-    if (!trimmed) {
-      await context.sendMessage('请提供项目路径，例如：\n/acp /home/kkito/proj/myapp');
+    // === Scan mode: /acp (no args) ===
+    if (trimmed === '') {
+      await handleScan(context);
       return { handled: true };
     }
 
-    // Path doesn't exist
-    if (!existsSync(trimmed)) {
-      await context.sendMessage(`❌ 路径不存在: ${trimmed}`);
+    // === Select mode: /acp N ===
+    if (/^\d+$/.test(trimmed)) {
+      await handleSelect(Number(trimmed), context, sessionManager);
       return { handled: true };
     }
 
-    // Not a directory
-    if (!statSync(trimmed).isDirectory()) {
-      await context.sendMessage(`❌ 不是目录: ${trimmed}`);
-      return { handled: true };
-    }
-
-    // Get or create sessionManager
-    const mgr = sessionManager || getGlobalSessionManager();
-    if (!mgr) {
-      await context.sendMessage('❌ ACP 功能未初始化');
-      return { handled: true };
-    }
-
-    await mgr.createSession(context.userId, trimmed, context.sendMessage);
+    // === Direct path mode (existing behavior) ===
+    await handleDirectPath(trimmed, context, existsSync, statSync, sessionManager);
     return { handled: true };
   };
 }
 
-/** Global sessionManager reference (set by start.ts on init) */
-let _globalManager: import('../../acp-session/manager.js').AcpSessionManager | null = null;
+async function handleScan(context: SlashCommandContext): Promise<void> {
+  const dirs = await loadAcpProjectDirs();
+  if (dirs.length === 0) {
+    await context.sendMessage('⚠️ 未配置 ACP 项目目录，请前往后台配置页面添加');
+    return;
+  }
 
-export function getGlobalSessionManager() {
-  return _globalManager;
+  const scanned = await scanProjectDirs(dirs);
+  if (scanned.length === 0) {
+    await context.sendMessage('⚠️ 配置的目录下没有子项目');
+    return;
+  }
+
+  const lines = scanned.map((d) => `${d.index}. ${d.name} (${d.root})`);
+  await context.sendMessage('可选项目：\n' + lines.join('\n') + '\n\n发送 /acp <序号> 进入对应项目');
 }
 
-export function setGlobalSessionManager(mgr: import('../../acp-session/manager.js').AcpSessionManager) {
-  _globalManager = mgr;
+async function handleSelect(
+  index: number,
+  context: SlashCommandContext,
+  sessionManager?: import('../../acp-session/manager.js').AcpSessionManager,
+): Promise<void> {
+  const dirs = await loadAcpProjectDirs();
+  if (dirs.length === 0) {
+    await context.sendMessage('⚠️ 未配置 ACP 项目目录');
+    return;
+  }
+
+  const selected = await selectProjectByIndex(dirs, index);
+  if (!selected) {
+    await context.sendMessage(`❌ 序号 ${index} 无效或目录不存在`);
+    return;
+  }
+
+  const mgr = sessionManager || getGlobalSessionManager();
+  if (!mgr) {
+    await context.sendMessage('❌ ACP 功能未初始化');
+    return;
+  }
+
+  await mgr.createSession(context.userId, selected.path, context.sendMessage);
+}
+
+async function handleDirectPath(
+  path: string,
+  context: SlashCommandContext,
+  existsSync: typeof fs.existsSync,
+  statSync: typeof fs.statSync,
+  sessionManager?: import('../../acp-session/manager.js').AcpSessionManager,
+): Promise<void> {
+  if (!existsSync(path)) {
+    await context.sendMessage(`❌ 路径不存在: ${path}`);
+    return;
+  }
+
+  if (!statSync(path).isDirectory()) {
+    await context.sendMessage(`❌ 不是目录: ${path}`);
+    return;
+  }
+
+  const mgr = sessionManager || getGlobalSessionManager();
+  if (!mgr) {
+    await context.sendMessage('❌ ACP 功能未初始化');
+    return;
+  }
+
+  await mgr.createSession(context.userId, path, context.sendMessage);
 }
