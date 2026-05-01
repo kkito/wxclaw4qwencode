@@ -311,8 +311,13 @@ handler: ./handler.js
     logger.info(`📢 Slash Commands: ${slashRegistry.listNames().join(', ')} 已加载`);
   }
 
-  // 定时检查 ACP 超时（每分钟）
-  const acpTimeoutCheck = setInterval(() => acpManager.checkTimeouts(), 60000);
+  // 定时检查 ACP 超时（每分钟），超时后发消息通知用户
+  const acpTimeoutCheck = setInterval(() =>
+    acpManager.checkTimeouts(async (userId, msg) => {
+      await sendMessageLib(account.baseUrl!, account.token!, userId, msg);
+    }),
+    60000,
+  );
 
   // 初始化消息发送节流器
   const throttleInterval = await loadSendThrottleInterval();
