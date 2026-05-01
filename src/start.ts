@@ -32,6 +32,8 @@ import { AcpSessionManager } from './acp-session/index.js';
 import { setGlobalSessionManager } from './commands/acp/handler.js';
 import createAcpHandler from './commands/acp/handler.js';
 import createStreamingHandler from './commands/streaming/handler.js';
+import { createSendThrottle } from './utils/send-throttle.js';
+import { loadSendThrottleInterval } from './config-store.js';
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url);
@@ -312,6 +314,15 @@ handler: ./handler.js
   // 定时检查 ACP 超时（每分钟）
   const acpTimeoutCheck = setInterval(() => acpManager.checkTimeouts(), 60000);
 
+  // 初始化消息发送节流器
+  const throttleInterval = await loadSendThrottleInterval();
+  const throttle = createSendThrottle(
+    async (text: string) => {
+      await sendMessageLib(account.baseUrl!, account.token!, '', text);
+    },
+    throttleInterval,
+  );
+
   // 创建 AgentRunner
   let runner: AgentRunner;
   try {
@@ -320,7 +331,7 @@ handler: ./handler.js
       logger,
       weixin: {
         sendMessage: async (to: string, text: string) => {
-          await sendMessageLib(account.baseUrl!, account.token!, to, text);
+          await throttle.enqueue(text);
         },
       },
       skillsManager,
@@ -415,6 +426,7 @@ handler: ./handler.js
     running = false;
     clearInterval(heartbeat);
     clearInterval(acpTimeoutCheck);
+    await throttle.flush();
     await runner.stop();
     logger.info('👋 已退出');
     process.exit(0);
