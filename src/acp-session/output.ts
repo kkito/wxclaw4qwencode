@@ -21,6 +21,8 @@ export class AcpWeixinOutput {
 
   onAgentMessageChunk(text: string, userId: string, sendMessage: (msg: string) => Promise<void>): void {
     if (!text) return;
+    // 过滤掉 qwen --acp 自行输出的工具调用提示文本，如 "🔧 正在调用: call_xxx"
+    if (/🔧.*正在调用/.test(text)) return;
     const buf = this.getOrCreateBuffer(userId);
     buf.text += text;
     this.maybeFlush(buf, userId, sendMessage);
