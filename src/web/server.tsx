@@ -1,13 +1,17 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import type { ServerType } from '@hono/node-server';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { IndexPage } from './views/index.js';
 import { CronPage } from './views/cron.js';
 import { SkillsPage } from './views/skills.js';
+import { ExecutorPage } from './views/executor.js';
 import { createSettingsRouter } from './views/settings.js';
 import { createAcpDirsRouter } from './views/acp-dirs.js';
 import { CronManager, CreateJobInput, UpdateJobInput } from '../cron/index.js';
 import { SkillsManager, CreateSkillInput, UpdateSkillInput } from '../skills/index.js';
+import { ExecutorManager } from '../executor/manager.js';
 import { loadAcpProjectDirs, saveAcpProjectDirs } from '../acp-config/store.js';
 
 export interface WebServerConfig {
@@ -15,6 +19,7 @@ export interface WebServerConfig {
   host?: string;
   cronManager?: CronManager;
   skillsManager?: SkillsManager;
+  executorManager?: ExecutorManager;
 }
 
 export function createWebServer(config: WebServerConfig): { app: Hono; server: ServerType } {
@@ -254,6 +259,98 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
 
   // ===== ACP Dirs Settings Page =====
   app.route('/settings/acp-dirs', createAcpDirsRouter());
+
+  // ===== Executor routes =====
+  if (config.executorManager) {
+    const execMgr = config.executorManager;
+
+    function scanSpecFiles(): string[] {
+      const specDir = path.join(process.cwd(), 'docs', 'superpowers', 'specs');
+      try {
+        const files = fs.readdirSync(specDir);
+        return files.filter((f) => f.endsWith('.md')).map((f) => path.join('docs', 'superpowers', 'specs', f));
+      } catch {
+        return [];
+      }
+    }
+
+    // GET /executor - page
+    app.get('/executor', async (c) => {
+      const tasks = execMgr.getTasks();
+      const configData = execMgr.getStore().loadConfig();
+      const projectDirs = await loadAcpProjectDirs();
+      const specFiles = scanSpecFiles();
+      const currentTask = tasks.find((t) => t.status === 'running') ?? null;
+      return c.html(
+        <ExecutorPage
+          tasks={tasks}
+          config={configData}
+          isEnabled={execMgr.isEnabled}
+          isExecuting={execMgr.isExecuting}
+          currentTask={currentTask}
+          projectDirs={projectDirs}
+          specFiles={specFiles}
+        />,
+      );
+    });
+
+    // POST /executor/tasks - create
+    app.post('/executor/tasks', async (c) => {
+      const form = await c.req.formData();
+      const projectId = form.get('projectId') as string;
+      const specPath = form.get('specPath') as string;
+      const initialPrompt = (form.get('initialPrompt') as string) || null;
+      const confirmPrompt = (form.get('confirmPrompt') as string) || null;
+      const task = execMgr.addTask(projectId, specPath);
+      if (initialPrompt || confirmPrompt) {
+        execMgr.updateTask(task.id, { initialPrompt, confirmPrompt });
+      }
+      return c.redirect('/executor');
+    });
+
+    // POST /executor/tasks/:id/delete
+    app.post('/executor/tasks/:id/delete', async (c) => {
+      try {
+        execMgr.removeTask(c.req.param('id'));
+      } catch {
+        // ignore if not found
+      }
+      return c.redirect('/executor');
+    });
+
+    // POST /executor/tasks/:id/requeue
+    app.post('/executor/tasks/:id/requeue', async (c) => {
+      try {
+        execMgr.requeueTask(c.req.param('id'));
+      } catch {
+        // ignore
+      }
+      return c.redirect('/executor');
+    });
+
+    // POST /executor/start
+    app.post('/executor/start', async (c) => {
+      // Don't await - start() runs the process queue loop indefinitely
+      execMgr.start().catch(console.error);
+      return c.redirect('/executor');
+    });
+
+    // POST /executor/stop
+    app.post('/executor/stop', async (c) => {
+      execMgr.stop();
+      return c.redirect('/executor');
+    });
+
+    // POST /executor/config
+    app.post('/executor/config', async (c) => {
+      const form = await c.req.formData();
+      execMgr.updateConfig({
+        defaultInitialPrompt: (form.get('defaultInitialPrompt') as string) || '',
+        defaultConfirmPrompt: (form.get('defaultConfirmPrompt') as string) || '',
+      });
+      return c.redirect('/executor');
+    });
+  }
 
   // 首页路由
   app.get('/', (c) => {
