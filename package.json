@@ -18,6 +18,7 @@
     "unbind": "node dist/cli.js unbind",
     "status": "node dist/cli.js status",
     "start": "node dist/start.js",
+    "start:all": "node dist/start-all.js",
     "web": "node dist/start-web.js",
     "web:d": "node dist/start-web.js -- --detach"
   },
