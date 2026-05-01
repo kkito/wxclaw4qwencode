@@ -27,80 +27,101 @@ describe('SendThrottle', () => {
   });
 
   describe('enqueue - basic functionality', () => {
-    it('should enqueue a single message and send after timer expires', async () => {
+    it('should send first message immediately', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
-      await throttle.enqueue('hello');
-      expect(sendFn).not.toHaveBeenCalled();
-
-      await vi.advanceTimersByTimeAsync(500);
+      await throttle.enqueue('user1', 'hello');
       expect(sendFn).toHaveBeenCalledTimes(1);
-      expect(sendFn).toHaveBeenCalledWith('hello');
+      expect(sendFn).toHaveBeenCalledWith('user1', 'hello');
     });
 
-    it('should use custom interval from constructor', async () => {
-      const throttle = new SendThrottle(sendFn, 1000);
+    it('should send first message immediately without waiting for timer', async () => {
+      const throttle = new SendThrottle(sendFn, 5000);
 
-      await throttle.enqueue('test');
+      await throttle.enqueue('user1', 'hello');
+      expect(sendFn).toHaveBeenCalledTimes(1);
 
-      await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).not.toHaveBeenCalled();
-
-      await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).toHaveBeenCalledWith('test');
+      // Even after long time, no more sends (first was immediate)
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(sendFn).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('enqueue - merge behavior', () => {
-    it('should merge multiple messages within the window', async () => {
+    it('should merge subsequent messages within the window', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
-      await throttle.enqueue('msg1');
-      await vi.advanceTimersByTimeAsync(100);
-
-      await throttle.enqueue('msg2');
-      await vi.advanceTimersByTimeAsync(100);
-
-      await throttle.enqueue('msg3');
-
-      // Third enqueue resets timer to 500ms, advance past it
-      await vi.advanceTimersByTimeAsync(500);
+      await throttle.enqueue('user1', 'msg1'); // immediate send
       expect(sendFn).toHaveBeenCalledTimes(1);
-      expect(sendFn).toHaveBeenCalledWith('msg1\nmsg2\nmsg3');
+
+      await vi.advanceTimersByTimeAsync(100);
+
+      await throttle.enqueue('user1', 'msg2'); // starts timer, buffers
+      await vi.advanceTimersByTimeAsync(100);
+
+      await throttle.enqueue('user1', 'msg3'); // resets timer, appends to buffer
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(sendFn).toHaveBeenCalledTimes(2); // 1 immediate + 1 merged
+      expect(sendFn).toHaveBeenLastCalledWith('user1', 'msg2\nmsg3');
     });
 
-    it('should reset timer on each enqueue', async () => {
+    it('should reset timer on each enqueue after first', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
-      await throttle.enqueue('first');
+      await throttle.enqueue('user1', 'first'); // immediate
+      expect(sendFn).toHaveBeenCalledTimes(1);
+
+      await throttle.enqueue('user1', 'second'); // starts timer
       await vi.advanceTimersByTimeAsync(400);
 
       // Timer should not have fired yet
-      expect(sendFn).not.toHaveBeenCalled();
+      expect(sendFn).toHaveBeenCalledTimes(1);
 
-      // Enqueue another message, resetting the timer
-      await throttle.enqueue('second');
+      await throttle.enqueue('user1', 'third'); // resets timer
       await vi.advanceTimersByTimeAsync(400);
 
-      // Still should not have fired (only 400ms since reset)
-      expect(sendFn).not.toHaveBeenCalled();
+      // Still should not have fired
+      expect(sendFn).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(100);
-      expect(sendFn).toHaveBeenCalledWith('first\nsecond');
+      expect(sendFn).toHaveBeenCalledTimes(2);
+      expect(sendFn).toHaveBeenLastCalledWith('user1', 'second\nthird');
     });
 
     it('should send separately after window expires between enqueues', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
-      await throttle.enqueue('batch1');
-      await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).toHaveBeenCalledWith('batch1');
-      sendFn.mockClear();
+      await throttle.enqueue('user1', 'batch1');
+      expect(sendFn).toHaveBeenCalledTimes(1);
+      expect(sendFn).toHaveBeenLastCalledWith('user1', 'batch1');
 
-      // After window expires, next enqueue starts fresh
-      await throttle.enqueue('batch2');
+      await throttle.enqueue('user1', 'batch2'); // new pending, timer set
       await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).toHaveBeenCalledWith('batch2');
+      expect(sendFn).toHaveBeenCalledTimes(2);
+      expect(sendFn).toHaveBeenLastCalledWith('user1', 'batch2');
+
+      await throttle.enqueue('user1', 'batch3'); // new pending, timer set
+      await vi.advanceTimersByTimeAsync(500);
+      expect(sendFn).toHaveBeenCalledTimes(3);
+      expect(sendFn).toHaveBeenLastCalledWith('user1', 'batch3');
+    });
+
+    it('should handle multiple users independently', async () => {
+      const throttle = new SendThrottle(sendFn, 500);
+
+      await throttle.enqueue('user1', 'msg for user1');
+      await throttle.enqueue('user2', 'msg for user2');
+
+      expect(sendFn).toHaveBeenCalledTimes(2);
+      expect(sendFn).toHaveBeenCalledWith('user1', 'msg for user1');
+      expect(sendFn).toHaveBeenCalledWith('user2', 'msg for user2');
+
+      await throttle.enqueue('user1', 'followup user1');
+      await throttle.enqueue('user2', 'followup user2');
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(sendFn).toHaveBeenCalledTimes(4);
     });
   });
 
@@ -108,55 +129,47 @@ describe('SendThrottle', () => {
     it('should not trigger send for empty string', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
-      await throttle.enqueue('');
-      await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).not.toHaveBeenCalled();
-    });
-
-    it('should not trigger send for falsy values', async () => {
-      const throttle = new SendThrottle(sendFn, 500);
-
-      await throttle.enqueue('' as string);
-      await vi.advanceTimersByTimeAsync(500);
+      await throttle.enqueue('user1', '');
       expect(sendFn).not.toHaveBeenCalled();
     });
 
     it('should not enqueue empty string alongside valid messages', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
-      await throttle.enqueue('hello');
-      await throttle.enqueue('');
-      await throttle.enqueue('world');
+      await throttle.enqueue('user1', 'hello'); // immediate
+      expect(sendFn).toHaveBeenCalledTimes(1);
+
+      await throttle.enqueue('user1', ''); // ignored
+      await throttle.enqueue('user1', 'world'); // merged, timer set
 
       await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).toHaveBeenCalledTimes(1);
-      expect(sendFn).toHaveBeenCalledWith('hello\nworld');
+      expect(sendFn).toHaveBeenCalledTimes(2);
+      expect(sendFn).toHaveBeenLastCalledWith('user1', 'world');
     });
   });
 
   describe('flush', () => {
-    it('should immediately send current buffer and clear it', async () => {
+    it('should immediately send pending buffer for a user', async () => {
       const throttle = new SendThrottle(sendFn, 5000);
 
-      await throttle.enqueue('hello');
-      await throttle.enqueue('world');
+      await throttle.enqueue('user1', 'hello'); // immediate
+      await throttle.enqueue('user1', 'world'); // pending in buffer
 
       await throttle.flush();
-      expect(sendFn).toHaveBeenCalledTimes(1);
-      expect(sendFn).toHaveBeenCalledWith('hello\nworld');
+      expect(sendFn).toHaveBeenCalledTimes(2);
+      expect(sendFn).toHaveBeenLastCalledWith('user1', 'world');
     });
 
-    it('should clear the timer when flushing', async () => {
-      const throttle = new SendThrottle(sendFn, 500);
+    it('should flush multiple users', async () => {
+      const throttle = new SendThrottle(sendFn, 5000);
 
-      await throttle.enqueue('hello');
+      await throttle.enqueue('user1', 'a');
+      await throttle.enqueue('user1', 'b');
+      await throttle.enqueue('user2', 'c');
+      await throttle.enqueue('user2', 'd');
+
       await throttle.flush();
-
-      sendFn.mockClear();
-
-      // Timer should have been cleared, no duplicate send
-      await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).not.toHaveBeenCalled();
+      expect(sendFn).toHaveBeenCalledTimes(4);
     });
 
     it('should be safe to call when buffer is empty', async () => {
@@ -169,14 +182,14 @@ describe('SendThrottle', () => {
     it('should allow subsequent enqueues after flush', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
-      await throttle.enqueue('first');
+      await throttle.enqueue('user1', 'first');
+      await throttle.enqueue('user1', 'second');
       await throttle.flush();
-      expect(sendFn).toHaveBeenCalledWith('first');
-      sendFn.mockClear();
+      expect(sendFn).toHaveBeenCalledTimes(2);
 
-      await throttle.enqueue('second');
-      await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).toHaveBeenCalledWith('second');
+      await throttle.enqueue('user1', 'third');
+      expect(sendFn).toHaveBeenCalledTimes(3);
+      expect(sendFn).toHaveBeenLastCalledWith('user1', 'third');
     });
   });
 
@@ -184,62 +197,44 @@ describe('SendThrottle', () => {
     it('should update interval for subsequent enqueues', async () => {
       const throttle = new SendThrottle(sendFn, 1000);
 
-      await throttle.enqueue('old-interval');
-      await vi.advanceTimersByTimeAsync(500);
-
-      // Change interval before timer fires
-      throttle.setInterval(200);
-
-      await vi.advanceTimersByTimeAsync(500);
-      // Should not have fired yet at 1000ms old interval since timer was reset
-      // and new interval is 200ms from the reset point
-      expect(sendFn).toHaveBeenCalledWith('old-interval');
-    });
-
-    it('should use new interval for fresh enqueues after setInterval', async () => {
-      const throttle = new SendThrottle(sendFn, 1000);
+      await throttle.enqueue('user1', 'first'); // immediate
+      expect(sendFn).toHaveBeenCalledTimes(1);
 
       throttle.setInterval(200);
 
-      await throttle.enqueue('new-interval');
+      await throttle.enqueue('user1', 'second'); // timer with new interval
       await vi.advanceTimersByTimeAsync(100);
-      expect(sendFn).not.toHaveBeenCalled();
+      expect(sendFn).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(100);
-      expect(sendFn).toHaveBeenCalledWith('new-interval');
+      expect(sendFn).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('concurrent enqueue', () => {
-    it('should handle rapid consecutive enqueues with single send', async () => {
+    it('should handle rapid consecutive enqueues', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
-      // Rapid consecutive calls
-      await Promise.all([
-        throttle.enqueue('a'),
-        throttle.enqueue('b'),
-        throttle.enqueue('c'),
-      ]);
+      // First one is immediate, rest are buffered
+      await throttle.enqueue('user1', 'a');
+      expect(sendFn).toHaveBeenCalledTimes(1);
+
+      await throttle.enqueue('user1', 'b');
+      await throttle.enqueue('user1', 'c');
 
       await vi.advanceTimersByTimeAsync(500);
-      expect(sendFn).toHaveBeenCalledTimes(1);
+      expect(sendFn).toHaveBeenCalledTimes(2);
     });
 
-    it('should merge all rapid concurrent enqueues', async () => {
+    it('should handle concurrent enqueues for different users', async () => {
       const throttle = new SendThrottle(sendFn, 500);
 
       await Promise.all([
-        throttle.enqueue('x'),
-        throttle.enqueue('y'),
-        throttle.enqueue('z'),
+        throttle.enqueue('user1', 'a'),
+        throttle.enqueue('user2', 'b'),
       ]);
 
-      await vi.advanceTimersByTimeAsync(500);
-      const sent = sendFn.mock.calls[0][0];
-      // All three should be present (order may vary due to async)
-      expect(sent).toContain('x');
-      expect(sent).toContain('y');
-      expect(sent).toContain('z');
+      expect(sendFn).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -252,9 +247,11 @@ describe('SendThrottle', () => {
     it('should pass interval to constructor', async () => {
       const throttle = createSendThrottle(sendFn, 300);
 
-      await throttle.enqueue('test');
+      await throttle.enqueue('user1', 'first'); // immediate
+      await throttle.enqueue('user1', 'test'); // timer
+
       await vi.advanceTimersByTimeAsync(300);
-      expect(sendFn).toHaveBeenCalledWith('test');
+      expect(sendFn).toHaveBeenCalledTimes(2);
     });
   });
 });

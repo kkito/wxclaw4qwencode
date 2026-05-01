@@ -317,8 +317,8 @@ handler: ./handler.js
   // 初始化消息发送节流器
   const throttleInterval = await loadSendThrottleInterval();
   const throttle = createSendThrottle(
-    async (text: string) => {
-      await sendMessageLib(account.baseUrl!, account.token!, '', text);
+    async (to: string, text: string) => {
+      await sendMessageLib(account.baseUrl!, account.token!, to, text);
     },
     throttleInterval,
   );
@@ -331,7 +331,7 @@ handler: ./handler.js
       logger,
       weixin: {
         sendMessage: async (to: string, text: string) => {
-          await throttle.enqueue(text);
+          await throttle.enqueue(to, text);
         },
       },
       skillsManager,
