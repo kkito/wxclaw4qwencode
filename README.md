@@ -253,6 +253,16 @@ npx vitest run tests/web/  # 只运行 Web 相关测试
 - `hono` — Web 框架
 - `node-cron` — 定时任务调度
 
+## 文档
+
+- [ACP 协议规范](docs/acp-protocol.md) — ACP 数据协议详解
+- [AgentScope 框架](docs/agentscope.md) — AgentScope 核心概念
+- [OpenClaw 微信核心](docs/openclaw-weixin-core.md) — 微信通道 API
+- [斜杠命令](docs/weixin-slash-commands.md) — 斜杠命令架构
+- [微信群支持](docs/weixin-group-support.md) — 群消息处理
+- [测试指南](docs/testing.md) — 测试体系说明
+- [TODO](docs/TODO.md) — 待办事项
+
 ## License
 
 ISC
