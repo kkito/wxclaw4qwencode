@@ -8,7 +8,6 @@ export interface ExecutorPageProps {
   isExecuting: boolean;
   currentTask: LongTask | null;
   projectDirs: string[];
-  specFiles: string[];
 }
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -34,7 +33,6 @@ export const ExecutorPage: FC<ExecutorPageProps> = ({
   isExecuting,
   currentTask,
   projectDirs,
-  specFiles,
 }) => {
   return (
     <html lang="zh-CN">
@@ -95,6 +93,46 @@ export const ExecutorPage: FC<ExecutorPageProps> = ({
               .flow-desc code { background: hsl(var(--muted)); padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-size: 0.8rem; }
               .cell-ellipsis { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
               .cell-result { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; }
+              .task-card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); padding: 1rem; margin-bottom: 0.75rem; }
+              .task-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.3rem 0; font-size: 0.85rem; }
+              .task-row .label { color: hsl(var(--muted-foreground)); flex-shrink: 0; width: 70px; }
+              .task-row .value { flex: 1; word-break: break-all; }
+              .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid hsl(var(--border)); }
+              .task-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid hsl(var(--border)); }
+              @media (min-width: 768px) {
+                .task-cards-mobile { display: none; }
+                .task-table-wrap { display: block; }
+              }
+              @media (max-width: 767px) {
+                .task-cards-mobile { display: block; }
+                .task-table-wrap { display: none; }
+              }
+            `,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              async function loadSpecs(projectPath) {
+                const select = document.getElementById('specPath');
+                if (!projectPath) {
+                  select.innerHTML = '<option value="">请先选择项目...</option>';
+                  return;
+                }
+                select.innerHTML = '<option value="">加载中...</option>';
+                try {
+                  const res = await fetch('/api/executor/specs?project=' + encodeURIComponent(projectPath));
+                  const data = await res.json();
+                  if (data.specs && data.specs.length > 0) {
+                    select.innerHTML = '<option value="">选择 Spec...</option>' +
+                      data.specs.map(s => '<option value="' + s.fullPath + '">' + s.filename + '</option>').join('');
+                  } else {
+                    select.innerHTML = '<option value="">该项目无 Spec 文件</option>';
+                  }
+                } catch (e) {
+                  select.innerHTML = '<option value="">加载失败</option>';
+                }
+              }
             `,
           }}
         />
@@ -166,16 +204,15 @@ export const ExecutorPage: FC<ExecutorPageProps> = ({
             <form action="/executor/tasks" method="post">
               <div class="form-group">
                 <label>项目目录</label>
-                <select name="projectId" required>
+                <select name="projectId" id="projectId" required onchange="loadSpecs(this.value)">
                   <option value="">选择项目...</option>
                   {projectDirs.map((d) => <option value={d}>{d}</option>)}
                 </select>
               </div>
               <div class="form-group">
                 <label>Spec 文件</label>
-                <select name="specPath" required>
-                  <option value="">选择 Spec...</option>
-                  {specFiles.map((s) => <option value={s}>{s}</option>)}
+                <select name="specPath" id="specPath" required>
+                  <option value="">请先选择项目...</option>
                 </select>
               </div>
               <div class="form-group">
@@ -193,35 +230,25 @@ export const ExecutorPage: FC<ExecutorPageProps> = ({
           {/* 任务列表 */}
           <div class="card">
             <h2>任务列表</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>项目</th>
-                  <th>Spec</th>
-                  <th>状态</th>
-                  <th>开始</th>
-                  <th>结束</th>
-                  <th>结果</th>
-                  <th>确认回复</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.length === 0 ? (
-                  <tr><td colspan={9}>暂无任务</td></tr>
-                ) : (
-                  tasks.map((task) => (
-                    <tr>
-                      <td><code>{task.id}</code></td>
-                      <td class="cell-ellipsis" title={task.projectId}>{task.projectId}</td>
-                      <td class="cell-ellipsis" title={task.specPath}>{task.specPath}</td>
-                      <td><span class={`badge badge-${STATUS_CLASS[task.status]}`}>{STATUS_LABELS[task.status]}</span></td>
-                      <td>{task.startedAt ? new Date(task.startedAt).toLocaleString('zh-CN') : '-'}</td>
-                      <td>{task.endedAt ? new Date(task.endedAt).toLocaleString('zh-CN') : '-'}</td>
-                      <td class="cell-result" title={task.result ?? ''}>{task.result ?? '-'}</td>
-                      <td class="cell-result" title={task.confirmResponse ?? ''}>{task.confirmResponse ?? '-'}</td>
-                      <td class="actions">
+            {tasks.length === 0 ? (
+              <p style={{ color: 'hsl(var(--muted-foreground))' }}>暂无任务</p>
+            ) : (
+              <>
+                {/* 移动端卡片视图 */}
+                <div class="task-cards-mobile">
+                  {tasks.map((task) => (
+                    <div class="task-card">
+                      <div class="task-header">
+                        <code style={{ fontSize: '0.8rem' }}>{task.id}</code>
+                        <span class={`badge badge-${STATUS_CLASS[task.status]}`}>{STATUS_LABELS[task.status]}</span>
+                      </div>
+                      <div class="task-row"><span class="label">项目</span><span class="value">{task.projectId}</span></div>
+                      <div class="task-row"><span class="label">Spec</span><span class="value">{task.specPath}</span></div>
+                      <div class="task-row"><span class="label">开始</span><span class="value">{task.startedAt ? new Date(task.startedAt).toLocaleString('zh-CN') : '-'}</span></div>
+                      <div class="task-row"><span class="label">结束</span><span class="value">{task.endedAt ? new Date(task.endedAt).toLocaleString('zh-CN') : '-'}</span></div>
+                      {task.result ? <div class="task-row"><span class="label">结果</span><span class="value">{task.result}</span></div> : null}
+                      {task.confirmResponse ? <div class="task-row"><span class="label">确认</span><span class="value">{task.confirmResponse}</span></div> : null}
+                      <div class="task-actions">
                         {task.status !== 'pending' && task.status !== 'running' ? (
                           <form action={`/executor/tasks/${task.id}/requeue`} method="post" style="display:inline;">
                             <button type="submit" class="btn btn-sm btn-muted">重新入队</button>
@@ -230,12 +257,55 @@ export const ExecutorPage: FC<ExecutorPageProps> = ({
                         <form action={`/executor/tasks/${task.id}/delete`} method="post" style="display:inline;" onsubmit="return confirm('确定删除?')">
                           <button type="submit" class="btn btn-sm btn-danger">删除</button>
                         </form>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 桌面端表格视图 */}
+                <div class="task-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>项目</th>
+                        <th>Spec</th>
+                        <th>状态</th>
+                        <th>开始</th>
+                        <th>结束</th>
+                        <th>结果</th>
+                        <th>确认回复</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tasks.map((task) => (
+                        <tr>
+                          <td><code>{task.id}</code></td>
+                          <td class="cell-ellipsis" title={task.projectId}>{task.projectId}</td>
+                          <td class="cell-ellipsis" title={task.specPath}>{task.specPath}</td>
+                          <td><span class={`badge badge-${STATUS_CLASS[task.status]}`}>{STATUS_LABELS[task.status]}</span></td>
+                          <td>{task.startedAt ? new Date(task.startedAt).toLocaleString('zh-CN') : '-'}</td>
+                          <td>{task.endedAt ? new Date(task.endedAt).toLocaleString('zh-CN') : '-'}</td>
+                          <td class="cell-result" title={task.result ?? ''}>{task.result ?? '-'}</td>
+                          <td class="cell-result" title={task.confirmResponse ?? ''}>{task.confirmResponse ?? '-'}</td>
+                          <td class="actions">
+                            {task.status !== 'pending' && task.status !== 'running' ? (
+                              <form action={`/executor/tasks/${task.id}/requeue`} method="post" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-muted">重新入队</button>
+                              </form>
+                            ) : null}
+                            <form action={`/executor/tasks/${task.id}/delete`} method="post" style="display:inline;" onsubmit="return confirm('确定删除?')">
+                              <button type="submit" class="btn btn-sm btn-danger">删除</button>
+                            </form>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </body>

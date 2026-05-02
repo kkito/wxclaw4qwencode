@@ -260,27 +260,72 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
   // ===== ACP Dirs Settings Page =====
   app.route('/settings/acp-dirs', createAcpDirsRouter());
 
+  // ===== Executor API =====
+
+  // GET /api/executor/specs?project=xxx - 按 mtime 倒序返回前 5 个 spec 文件
+  app.get('/api/executor/specs', async (c) => {
+    const project = c.req.query('project');
+    if (!project) {
+      return c.json({ error: 'project parameter is required' }, 400);
+    }
+
+    const specDir = path.join(project, 'docs', 'superpowers', 'specs');
+    try {
+      const files = fs.readdirSync(specDir);
+      const mdFiles = files.filter((f) => f.endsWith('.md'));
+
+      // 获取每个文件的 mtime
+      const filesWithMtime = mdFiles.map((f) => {
+        const fullPath = path.join(specDir, f);
+        const stat = fs.statSync(fullPath);
+        return {
+          filename: f,
+          fullPath: path.join('docs', 'superpowers', 'specs', f),
+          mtime: stat.mtimeMs,
+        };
+      });
+
+      // 按 mtime 倒序，取前 5 个
+      const sorted = filesWithMtime.sort((a, b) => b.mtime - a.mtime).slice(0, 5);
+      return c.json({ specs: sorted });
+    } catch {
+      return c.json({ specs: [] });
+    }
+  });
+
   // ===== Executor routes =====
   if (config.executorManager) {
     const execMgr = config.executorManager;
-
-    function scanSpecFiles(): string[] {
-      const specDir = path.join(process.cwd(), 'docs', 'superpowers', 'specs');
-      try {
-        const files = fs.readdirSync(specDir);
-        return files.filter((f) => f.endsWith('.md')).map((f) => path.join('docs', 'superpowers', 'specs', f));
-      } catch {
-        return [];
-      }
-    }
 
     // GET /executor - page
     app.get('/executor', async (c) => {
       const tasks = execMgr.getTasks();
       const configData = execMgr.getStore().loadConfig();
       const projectDirs = await loadAcpProjectDirs();
-      const specFiles = scanSpecFiles();
       const currentTask = tasks.find((t) => t.status === 'running') ?? null;
+
+      // 扫描项目目录下的实际项目
+      const projects: string[] = [];
+      for (const dir of projectDirs) {
+        try {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isDirectory()) {
+              const fullPath = path.join(dir, entry.name);
+              // 判断是否为项目目录：包含 package.json 或 .git 或 tsconfig.json
+              const hasPackageJson = fs.existsSync(path.join(fullPath, 'package.json'));
+              const hasGit = fs.existsSync(path.join(fullPath, '.git'));
+              const hasTsConfig = fs.existsSync(path.join(fullPath, 'tsconfig.json'));
+              if (hasPackageJson || hasGit || hasTsConfig) {
+                projects.push(fullPath);
+              }
+            }
+          }
+        } catch {
+          // 目录不存在或无法读取，跳过
+        }
+      }
+
       return c.html(
         <ExecutorPage
           tasks={tasks}
@@ -288,8 +333,7 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
           isEnabled={execMgr.isEnabled}
           isExecuting={execMgr.isExecuting}
           currentTask={currentTask}
-          projectDirs={projectDirs}
-          specFiles={specFiles}
+          projectDirs={projects}
         />,
       );
     });

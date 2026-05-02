@@ -115,6 +115,7 @@ export const IndexPage: FC<IndexPageProps> = (props) => {
               <p style={{ 'margin-bottom': '0.75rem' }}>
                 <a href="/cron" style={{ color: '#667eea', 'text-decoration': 'none' }}>Cron 任务管理</a> |{' '}
                 <a href="/skills" style={{ color: '#667eea', 'text-decoration': 'none' }}>Skills 管理</a> |{' '}
+                <a href="/executor" style={{ color: '#667eea', 'text-decoration': 'none' }}>任务管理器</a> |{' '}
                 <a href="/settings" style={{ color: '#667eea', 'text-decoration': 'none' }}>设置</a>
               </p>
             </div>
