@@ -10,10 +10,14 @@ vi.mock('../../src/acp/client.js', () => ({
     private _sessionUpdateCallback: ((update: any) => void) | null = null;
     constructor() {
       _lastMockClient = this;
+      (this as any)._cancelCalled = false;
     }
     async start() {}
     async sendMessage() {
       return { usage: { input_tokens: 100, output_tokens: 50 } };
+    }
+    async cancel() {
+      (this as any)._cancelCalled = true;
     }
     async close() {
       this._closed = true;
@@ -130,5 +134,17 @@ describe('AcpSessionManager', () => {
     // But server kept resetting activity, so session should still be alive
     await manager.checkTimeouts();
     expect(manager.hasActiveSession('user1')).toBe(true);
+  });
+
+  it('cancelTask sends cancel to client', async () => {
+    await manager.createSession('user1', '/test', sendMock);
+    await manager.cancelTask('user1', sendMock);
+    // cancel should have been called on the mock client
+    expect(_lastMockClient._cancelCalled).toBe(true);
+  });
+
+  it('cancelTask for non-existent session warns', async () => {
+    await manager.cancelTask('nobody', sendMock);
+    expect(sendMock).toHaveBeenCalledWith(expect.stringContaining('不在 ACP 模式中'));
   });
 });
