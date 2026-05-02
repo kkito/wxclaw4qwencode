@@ -11,7 +11,7 @@ describe('ExecutorRunner', () => {
     id: 't1', projectId: '/tmp/proj', specPath: 'docs/spec.md',
     initialPrompt: null, confirmPrompt: null, status: 'pending',
     startedAt: null, endedAt: null, result: null, confirmResponse: null,
-    createdAt: '2026-05-02T10:00:00Z',
+    createdAt: '2026-05-02T10:00:00Z', updatedAt: null, latestOutput: null,
   };
 
   const mockConfig: ExecutorConfig = {
@@ -150,15 +150,18 @@ describe('ExecutorRunner', () => {
       .mockResolvedValueOnce({ stopReason: 'end_turn' } as PromptResponse)
       .mockResolvedValueOnce({ stopReason: 'end_turn' } as PromptResponse);
 
-    const outputCallback = vi.fn();
-    const resultPromise = runner.run(mockTask, mockConfig, outputCallback);
+    const progressCallback = vi.fn();
+    const resultPromise = runner.run(mockTask, mockConfig, progressCallback);
 
     registeredCb!({ sessionUpdate: 'agent_message_chunk', content: { type: 'thinking', text: 'thinking...' } } as SessionUpdate);
     registeredCb!({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'actual text' } } as SessionUpdate);
 
     const result = await resultPromise;
-    expect(outputCallback).toHaveBeenCalledTimes(1);
-    expect(outputCallback).toHaveBeenCalledWith('actual text');
+    expect(progressCallback).toHaveBeenCalledTimes(1);
+    expect(progressCallback).toHaveBeenCalledWith({
+      updatedAt: expect.any(String),
+      latestOutput: 'actual text',
+    });
   });
 
   it('truncates accumulated text to 500 chars', async () => {
@@ -249,5 +252,70 @@ describe('ExecutorRunner', () => {
     acpSendSpy.mockRejectedValue(new Error('TIMEOUT'));
     const result = await runner.run(mockTask, mockConfig);
     expect(result.status).toBe('timeout');
+  });
+
+  it('calls onProgress callback with updatedAt and latestOutput on AI output', async () => {
+    let registeredCb: ((update: SessionUpdate) => void) | null = null;
+    acpSetCbSpy.mockImplementation((cb) => { registeredCb = cb; });
+
+    let resolve1: (val: PromptResponse) => void;
+    let resolve2: (val: PromptResponse) => void;
+    const p1 = new Promise<PromptResponse>((r) => { resolve1 = r; });
+    const p2 = new Promise<PromptResponse>((r) => { resolve2 = r; });
+    acpSendSpy.mockReturnValueOnce(p1).mockReturnValueOnce(p2);
+
+    const progressCallback = vi.fn();
+    const resultPromise = runner.run(mockTask, mockConfig, progressCallback);
+
+    registeredCb!({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Hello ' } } as SessionUpdate);
+    registeredCb!({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'World' } } as SessionUpdate);
+
+    resolve1!({ stopReason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } } as PromptResponse);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    registeredCb!({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Done' } } as SessionUpdate);
+    resolve2!({ stopReason: 'end_turn', usage: { input_tokens: 5, output_tokens: 3 } } as PromptResponse);
+
+    await resultPromise;
+
+    expect(progressCallback).toHaveBeenCalledTimes(3);
+    // Check first call structure
+    expect(progressCallback).toHaveBeenNthCalledWith(1, {
+      updatedAt: expect.any(String),
+      latestOutput: 'Hello ',
+    });
+    // Check second call accumulates text
+    expect(progressCallback).toHaveBeenNthCalledWith(2, {
+      updatedAt: expect.any(String),
+      latestOutput: 'Hello World',
+    });
+  });
+
+  it('truncates latestOutput to last 200 characters in onProgress', async () => {
+    let registeredCb: ((update: SessionUpdate) => void) | null = null;
+    acpSetCbSpy.mockImplementation((cb) => { registeredCb = cb; });
+
+    let resolve1: (val: PromptResponse) => void;
+    acpSendSpy.mockReturnValueOnce(new Promise<PromptResponse>((r) => { resolve1 = r; }));
+
+    const progressCallback = vi.fn();
+    const resultPromise = runner.run(mockTask, mockConfig, progressCallback);
+
+    // Send text longer than 200 chars
+    const longText = 'x'.repeat(300);
+    registeredCb!({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: longText } } as SessionUpdate);
+
+    resolve1!({ stopReason: 'end_turn' } as PromptResponse);
+    await Promise.resolve();
+
+    expect(progressCallback).toHaveBeenCalledTimes(1);
+    expect(progressCallback).toHaveBeenCalledWith({
+      updatedAt: expect.any(String),
+      latestOutput: 'x'.repeat(200), // Should be truncated to last 200 chars
+    });
+
+    await resultPromise;
   });
 });

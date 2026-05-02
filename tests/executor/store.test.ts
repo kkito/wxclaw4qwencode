@@ -21,6 +21,8 @@ describe('LongTaskStore', () => {
     result: null,
     confirmResponse: null,
     createdAt: '2026-05-02T10:00:00Z',
+    updatedAt: null,
+    latestOutput: null,
   });
 
   beforeEach(() => {

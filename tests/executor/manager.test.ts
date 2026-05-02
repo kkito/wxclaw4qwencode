@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { TaskResult } from '../../src/executor/runner.js';
+import type { TaskProgress } from '../../src/executor/types.js';
 
 const mockRunResult: TaskResult = {
   status: 'success',
@@ -12,7 +13,7 @@ const mockRunResult: TaskResult = {
   confirmResponse: '是',
 };
 
-const _mockRun = vi.fn<(task: unknown, config: unknown, onOutput?: (text: string) => void) => Promise<TaskResult>>()
+const _mockRun = vi.fn<(task: unknown, config: unknown, onProgress?: (progress: TaskProgress) => void) => Promise<TaskResult>>()
   .mockResolvedValue(mockRunResult);
 
 vi.mock('../../src/executor/runner.js', () => {
@@ -87,6 +88,8 @@ describe('ExecutorManager', () => {
       const tasks = manager.getTasks();
       expect(tasks[0].status).toBe('pending');
       expect(tasks[0].startedAt).toBeNull();
+      expect(tasks[0].updatedAt).toBeNull();
+      expect(tasks[0].latestOutput).toBeNull();
     });
   });
 
@@ -131,6 +134,90 @@ describe('ExecutorManager', () => {
       manager.stop();
       expect(manager.isEnabled).toBe(false);
       expect(manager.running).toBe(false);
+    });
+  });
+
+  describe('executeTask progress tracking', () => {
+    it('sets startedAt and updatedAt immediately when task starts', async () => {
+      const manager = new ExecutorManager(tempDir);
+      const task = manager.addTask('/p', 's.md');
+
+      // Mock run to capture updateTask calls
+      const updateSpy = vi.spyOn(manager.getStore(), 'updateTask');
+
+      // Manually call executeTask through processQueue
+      manager['isExecuting'] = false;
+      const executePromise = manager['executeTask'](task);
+
+      // Check that updateTask was called with running status and timestamps
+      const firstCall = updateSpy.mock.calls[0];
+      expect(firstCall[0]).toBe(task.id);
+      expect(firstCall[1]).toMatchObject({
+        status: 'running',
+        startedAt: expect.any(String),
+        updatedAt: expect.any(String),
+        latestOutput: null,
+      });
+
+      await executePromise;
+    });
+
+    it('updates progress via onProgress callback during execution', async () => {
+      const manager = new ExecutorManager(tempDir);
+      const task = manager.addTask('/p', 's.md');
+
+      // Mock run to simulate onProgress callback
+      _mockRun.mockImplementation(async (_task, _config, onProgress) => {
+        if (onProgress) {
+          onProgress({
+            updatedAt: '2026-05-02T10:00:30Z',
+            latestOutput: 'progress update',
+          });
+        }
+        return mockRunResult;
+      });
+
+      await manager['executeTask'](task);
+
+      const tasks = manager.getTasks();
+      expect(tasks[0].latestOutput).toBe('progress update');
+      // updatedAt is overwritten by completion time, so we just check it exists
+      expect(tasks[0].updatedAt).toBeDefined();
+    });
+
+    it('sets endedAt and updatedAt on task completion', async () => {
+      const manager = new ExecutorManager(tempDir);
+      const task = manager.addTask('/p', 's.md');
+
+      await manager['executeTask'](task);
+
+      const tasks = manager.getTasks();
+      expect(tasks[0].status).toBe('success');
+      expect(tasks[0].endedAt).toBe(mockRunResult.endedAt);
+      expect(tasks[0].updatedAt).toBe(mockRunResult.endedAt);
+    });
+
+    it('sets endedAt and updatedAt on failure', async () => {
+      const manager = new ExecutorManager(tempDir);
+      const task = manager.addTask('/p', 's.md');
+
+      _mockRun.mockRejectedValue(new Error('test error'));
+
+      await manager['executeTask'](task);
+
+      const tasks = manager.getTasks();
+      expect(tasks[0].status).toBe('failed');
+      expect(tasks[0].endedAt).toBeDefined();
+      expect(tasks[0].updatedAt).toBe(tasks[0].endedAt);
+    });
+  });
+
+  describe('addTask initializes new fields', () => {
+    it('initializes updatedAt and latestOutput to null', () => {
+      const manager = new ExecutorManager(tempDir);
+      const task = manager.addTask('/p', 's.md');
+      expect(task.updatedAt).toBeNull();
+      expect(task.latestOutput).toBeNull();
     });
   });
 });

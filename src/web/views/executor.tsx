@@ -246,8 +246,12 @@ export const ExecutorPage: FC<ExecutorPageProps> = ({
                       <div class="task-row"><span class="label">Spec</span><span class="value">{task.specPath}</span></div>
                       <div class="task-row"><span class="label">开始</span><span class="value">{task.startedAt ? new Date(task.startedAt).toLocaleString('zh-CN') : '-'}</span></div>
                       <div class="task-row"><span class="label">结束</span><span class="value">{task.endedAt ? new Date(task.endedAt).toLocaleString('zh-CN') : '-'}</span></div>
+                      <div class="task-row"><span class="label">更新</span><span class="value">{task.updatedAt ? new Date(task.updatedAt).toLocaleString('zh-CN') : '-'}</span></div>
                       {task.result ? <div class="task-row"><span class="label">结果</span><span class="value">{task.result}</span></div> : null}
                       {task.confirmResponse ? <div class="task-row"><span class="label">确认</span><span class="value">{task.confirmResponse}</span></div> : null}
+                      {task.latestOutput ? (
+                        <div class="task-row"><span class="label">进展</span><span class="value">{task.latestOutput}</span></div>
+                      ) : null}
                       <div class="task-actions">
                         {task.status !== 'pending' && task.status !== 'running' ? (
                           <form action={`/executor/tasks/${task.id}/requeue`} method="post" style="display:inline;">
@@ -273,8 +277,10 @@ export const ExecutorPage: FC<ExecutorPageProps> = ({
                         <th>状态</th>
                         <th>开始</th>
                         <th>结束</th>
+                        <th>最后更新</th>
                         <th>结果</th>
                         <th>确认回复</th>
+                        <th>最新进展</th>
                         <th>操作</th>
                       </tr>
                     </thead>
@@ -287,8 +293,10 @@ export const ExecutorPage: FC<ExecutorPageProps> = ({
                           <td><span class={`badge badge-${STATUS_CLASS[task.status]}`}>{STATUS_LABELS[task.status]}</span></td>
                           <td>{task.startedAt ? new Date(task.startedAt).toLocaleString('zh-CN') : '-'}</td>
                           <td>{task.endedAt ? new Date(task.endedAt).toLocaleString('zh-CN') : '-'}</td>
+                          <td>{task.updatedAt ? new Date(task.updatedAt).toLocaleString('zh-CN') : '-'}</td>
                           <td class="cell-result" title={task.result ?? ''}>{task.result ?? '-'}</td>
                           <td class="cell-result" title={task.confirmResponse ?? ''}>{task.confirmResponse ?? '-'}</td>
+                          <td class="cell-ellipsis" title={task.latestOutput ?? ''}>{task.latestOutput ?? '-'}</td>
                           <td class="actions">
                             {task.status !== 'pending' && task.status !== 'running' ? (
                               <form action={`/executor/tasks/${task.id}/requeue`} method="post" style="display:inline;">
