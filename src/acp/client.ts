@@ -100,6 +100,19 @@ export class AcpClient {
   }
 
   /**
+   * 取消当前正在进行的 prompt 操作
+   * 不关闭连接/会话，用户可以继续发消息
+   */
+  async cancel(): Promise<void> {
+    if (!this.acpConnection || !this.sessionInfo) {
+      throw new Error('未连接或未创建会话');
+    }
+    await this.acpConnection.cancel({
+      sessionId: this.sessionInfo.sessionId,
+    });
+  }
+
+  /**
    * 获取当前会话信息
    */
   getSessionInfo(): AcpSessionInfo | null {
