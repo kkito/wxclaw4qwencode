@@ -51,7 +51,7 @@ export class AcpSessionManager {
     const output = new AcpWeixinOutput({
       prefix: `**🔮 ACP** › \`${cwd}\`\n\n`,
       flushIntervalMs: 3000,
-      flushThresholdChars: 200,
+      flushThresholdChars: 2000,
     });
 
     // 设置 sessionUpdate 回调，用于将 ACP 输出转发到微信
