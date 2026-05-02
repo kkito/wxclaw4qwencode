@@ -24,6 +24,20 @@ export class ExecutorRunner {
     let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
     let timedOut = false;
 
+    const resetTimeout = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      timeoutTimer = setTimeout(() => {
+        timedOut = true;
+        reject(new Error('TIMEOUT'));
+      }, TIMEOUT_MS);
+    };
+
+    let reject: (reason: Error) => void;
+    const timeoutPromise = new Promise<never>((_, rej) => {
+      reject = rej as (reason: Error) => void;
+      resetTimeout();
+    });
+
     // Accumulate text from session updates
     let accumulatedText = '';
     let confirmAccumulatedText = '';
@@ -41,6 +55,8 @@ export class ExecutorRunner {
           if (onOutput) {
             onOutput(content.text);
           }
+          // Reset timeout on each update — activity means the task is still alive
+          resetTimeout();
         }
       }
     });
@@ -50,14 +66,6 @@ export class ExecutorRunner {
 
       const initialPrompt = task.initialPrompt ?? config.defaultInitialPrompt;
       const confirmPrompt = task.confirmPrompt ?? config.defaultConfirmPrompt;
-
-      // Set up timeout
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutTimer = setTimeout(() => {
-          timedOut = true;
-          reject(new Error('TIMEOUT'));
-        }, TIMEOUT_MS);
-      });
 
       // Stage 1: Send initial prompt (specPath + initialPrompt)
       const promptText = `${task.specPath}\n\n${initialPrompt}`;

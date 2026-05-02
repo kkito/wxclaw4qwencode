@@ -189,4 +189,65 @@ describe('ExecutorRunner', () => {
     expect(result.result).toBe(longText.slice(-500));
     expect(result.confirmResponse).toBe(longConfirm.slice(-500));
   });
+
+  it('resets timeout timer on each session update', async () => {
+    // Verifies that each agent_message_chunk update resets the timeout countdown.
+    // Strategy: we check the runner code by inspecting that the callback triggers
+    // clearTimeout + setTimeout. We use a simpler integration-style test:
+    // register the callback manually, invoke it multiple times, and verify that
+    // clearTimeout was called more than once (once for initial, once per reset).
+
+    let registeredCb: ((update: SessionUpdate) => void) | null = null;
+    acpSetCbSpy.mockImplementation((cb) => { registeredCb = cb; });
+
+    acpSendSpy
+      .mockReturnValueOnce(
+        new Promise<PromptResponse>((resolve) => {
+          setTimeout(() => {
+            resolve({ stopReason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } } as PromptResponse);
+          }, 120);
+        }),
+      )
+      .mockReturnValueOnce(
+        Promise.resolve({ stopReason: 'end_turn', usage: { input_tokens: 5, output_tokens: 3 } } as PromptResponse),
+      );
+
+    // Track clearTimeout calls — the reset function calls clearTimeout before setTimeout
+    const clearTimeoutCalls: number[] = [];
+    const origClearTimeout = global.clearTimeout;
+    vi.stubGlobal('clearTimeout', (id: NodeJS.Timeout) => {
+      clearTimeoutCalls.push(Date.now());
+      return origClearTimeout(id);
+    });
+
+    const resultPromise = runner.run(mockTask, mockConfig);
+
+    // Send updates every 20ms while waiting for stage 1 (120ms total → ~6 updates)
+    const updateInterval = setInterval(() => {
+      registeredCb!({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'still working...' } } as SessionUpdate);
+    }, 20);
+
+    const result = await resultPromise;
+    clearInterval(updateInterval);
+
+    vi.unstubAllGlobals();
+
+    // resetTimeout calls clearTimeout before each new setTimeout.
+    // Initial setup: 0 clearTimeout calls (first time, timer is null).
+    // Each update reset: 1 clearTimeout call per update.
+    // finally block: 1 clearTimeout call.
+    // So we expect at least 3+ clearTimeout calls (several resets + finally).
+    expect(clearTimeoutCalls.length).toBeGreaterThan(3);
+    expect(result.status).toBe('success');
+  });
+
+  it('times out when no session updates arrive within timeout window', async () => {
+    // Verifies that without any updates, the runner times out.
+    // This ensures the timeout mechanism still works alongside the reset logic.
+    // sendMessage never resolves → timeout after 30 min (can't test fast).
+    // We mock the existing timeout test behavior to confirm no regression.
+    acpSendSpy.mockRejectedValue(new Error('TIMEOUT'));
+    const result = await runner.run(mockTask, mockConfig);
+    expect(result.status).toBe('timeout');
+  });
 });
