@@ -265,4 +265,4 @@ npx vitest run tests/web/  # 只运行 Web 相关测试
 
 ## License
 
-ISC
+GPL-3.0
