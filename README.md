@@ -23,7 +23,6 @@
 - **自动超时**：30 分钟无活动自动结束会话
 - **权限自动同意**：工具调用（文件读写、shell 命令等）自动允许
 - **Token 统计**：每轮回复后显示输入/输出 token 数
-- **每用户独立进程**：每个微信用户独立的 qwen 进程
 
 **数据流：**
 
@@ -50,27 +49,21 @@ AcpClient.sendMessage()
 
 ### 2. Executor 长任务执行器
 
-基于 ACP 的异步任务队列系统，用于执行需要较长时间（最长 30 分钟）的 coding 任务。与 ACP 模式的实时交互不同，Executor 适合批量/异步场景：用户提交任务规格后，系统排队执行，无需用户在线等待。
+基于 ACP 和 Superpower 的异步任务队列系统。用户提前编写好 spec 文件（任务规格说明），Executor 会自动读取 spec 并利用 Superpower 的能力自动完成实现。与 ACP 模式的实时交互不同，Executor 适合批量/异步场景：用户提交 spec 后，系统排队自动执行，无需用户在线等待。
 
-**两阶段执行流程：**
+**工作流程：**
 
-1. **Stage 1 (initial)**：发送 spec 文件路径 + initial prompt，等待 end_turn
-2. **Stage 2 (confirm)**：发送 confirm prompt "任务是否完成？"，判断是否结束
+1. 用户编写 spec 文件，定义任务需求和规格
+2. 通过 Web 界面或 API 提交任务，选择对应的 spec 文件
+3. Executor 读取 spec，利用 Superpower 功能自动完成实现
+4. 任务排队执行，全程无需用户干预
 
 **任务状态：** `pending → running → completed`，失败时标记为 `failed`。
 
 **管理方式：**
 
-- Web 页面 `/executor`：创建任务、选择项目、选择 spec 文件、自定义 prompt、查看队列、启动/停止执行器、删除/重新入队
+- Web 页面 `/executor`：创建任务、选择项目、选择 spec 文件、查看队列、启动/停止执行器、删除/重新入队
 - API：`/api/executor/tasks` CRUD + `/api/executor/start` `/api/executor/stop`
-
-**超时机制：**
-- 30 分钟硬超时
-- 每次收到 session update 重置超时计时器（表示任务仍在运行）
-
-**存储：**
-- `~/.ownclaw/executor/tasks.json` — 任务列表
-- `~/.ownclaw/executor/config.json` — 执行器配置
 
 详见 [Executor 文档](docs/executor.md)。
 
