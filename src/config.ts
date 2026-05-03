@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { LogLevel } from './logger';
+import { loadModelConfig } from './config-store';
 
 // Channel 配置 schema
 export const ChannelSchema = z.object({
@@ -20,7 +21,7 @@ export const ConfigSchema = z.object({
   agentscope: z.object({
     model: z.object({
       type: z.literal('custom'),
-      baseUrl: z.string(),
+      baseUrl: z.string().optional(),
       apiKey: z.string().optional(),
       modelName: z.string(),
     }),
@@ -31,17 +32,21 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 
-export function loadConfig(): Config {
-  // 简化：从环境变量读取配置
-  const baseUrl = process.env.AGENT_MODEL_BASE_URL;
-  const apiKey = process.env.AGENT_MODEL_API_KEY;
-  const modelName = process.env.AGENT_MODEL_NAME || 'gpt-4o';
-  const sysPrompt = process.env.AGENT_SYS_PROMPT || '你是一个友好的 AI 助手。';
+export async function loadConfig(): Promise<Config> {
+  // First load from config-store
+  const storedModel = await loadModelConfig();
+
+  // Then overlay environment variables (env vars take precedence)
+  const envBaseUrl = process.env.AGENT_MODEL_BASE_URL || undefined;
+  const envApiKey = process.env.AGENT_MODEL_API_KEY || undefined;
+  const envModelName = process.env.AGENT_MODEL_NAME || undefined;
+  const envSysPrompt = process.env.AGENT_SYS_PROMPT || undefined;
   const logLevel = (process.env.AGENT_LOG_LEVEL as LogLevel) || 'info';
 
-  if (!baseUrl) {
-    throw new Error('AGENT_MODEL_BASE_URL 环境变量未设置');
-  }
+  const baseUrl = envBaseUrl ?? storedModel.baseUrl;
+  const apiKey = envApiKey ?? storedModel.apiKey;
+  const modelName = envModelName ?? storedModel.modelName ?? 'gpt-4o';
+  const sysPrompt = envSysPrompt ?? storedModel.sysPrompt ?? '你是一个友好的 AI 助手。';
 
   const config = {
     log: {

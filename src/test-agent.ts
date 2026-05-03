@@ -9,7 +9,7 @@ import { createAgentRunner } from './runner/agent-runner.js';
 async function testAgent() {
   console.log('=== 测试 AgentScope -> 大模型 ===\n');
 
-  const config = loadConfig();
+  const config = await loadConfig();
   const logger = createLogger({ level: 'debug', prefix: '[Test] ' });
 
   // 创建一个 mock sendMessage（不实际发送）

@@ -17,9 +17,17 @@ export interface ChannelConfig {
   wecom?: WecomChannelConfig;
 }
 
+export interface ModelConfig {
+  baseUrl?: string;
+  apiKey?: string;
+  modelName?: string;
+  sysPrompt?: string;
+}
+
 export interface OwnClawConfig {
   sendThrottleIntervalMs?: number;
   channel?: ChannelConfig;
+  model?: ModelConfig;
 }
 
 const DEFAULT_CONFIG: OwnClawConfig = {
@@ -117,4 +125,43 @@ export async function saveChannelConfig(channel: ChannelConfig): Promise<void> {
 export async function isWecomEnabled(): Promise<boolean> {
   const channel = await loadChannelConfig();
   return !!(channel.wecom?.enabled && channel.wecom.botId && channel.wecom.secret);
+}
+
+/**
+ * Load model configuration from config.json.
+ * Returns empty object if not set or read fails.
+ */
+export async function loadModelConfig(): Promise<ModelConfig> {
+  try {
+    const configPath = resolveConfigPath();
+    const raw = await fs.readFile(configPath, 'utf-8');
+    const parsed = JSON.parse(raw) as OwnClawConfig;
+    return parsed.model ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save model configuration to config.json, merging with existing config.
+ */
+export async function saveModelConfig(config: Partial<ModelConfig>): Promise<void> {
+  const configPath = resolveConfigPath();
+  const dir = resolveConfigDir();
+
+  let existing: OwnClawConfig = {};
+  try {
+    const raw = await fs.readFile(configPath, 'utf-8');
+    existing = JSON.parse(raw) as OwnClawConfig;
+  } catch {
+    // File doesn't exist or is invalid, start fresh
+  }
+
+  existing.model = {
+    ...existing.model,
+    ...config,
+  };
+
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(configPath, JSON.stringify(existing, null, 2), 'utf-8');
 }

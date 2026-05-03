@@ -62,7 +62,7 @@ export interface WeixinBridgeOptions {
 }
 
 export class WeixinBridge {
-  private agent: Agent;
+  private agent: Agent | null;
   private sendMessageFn: (to: string, text: string) => Promise<void>;
   private sendMessageWithOptionsFn: (to: string, text: string, opts: SendMessageOptions) => Promise<void>;
   private logger: Logger;
@@ -78,6 +78,10 @@ export class WeixinBridge {
     this.acpManager = options.acpManager || null;
   }
 
+  setAgent(agent: Agent): void {
+    this.agent = agent;
+  }
+
   private defaultSendMessageWithOptions = async (
     to: string,
     text: string,
@@ -90,6 +94,12 @@ export class WeixinBridge {
     const userId = weixinMsg.from_user_id;
     if (!userId) {
       this.logger.warn('消息缺少 from_user_id');
+      return;
+    }
+
+    // 检查 agent 是否已配置
+    if (!this.agent) {
+      await this.sendMessageFn(userId, '模型配置未完成，请前往设置页面配置。');
       return;
     }
 

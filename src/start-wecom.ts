@@ -72,7 +72,7 @@ async function startWecom(): Promise<void> {
   // 加载配置
   let config: Config;
   try {
-    config = loadConfig();
+    config = await loadConfig();
   } catch (error) {
     console.error('配置加载失败:', error);
     process.exit(1);
@@ -152,6 +152,11 @@ handler: ./handler.js
 
   if (slashRegistry.listNames().length > 0) {
     logger.info(`📢 Slash Commands: ${slashRegistry.listNames().join(', ')} 已加载`);
+  }
+
+  if (!config.agentscope.model.baseUrl) {
+    logger.error('模型 API 地址 (baseUrl) 未设置');
+    process.exit(1);
   }
 
   // 创建 Agent（独立实例，与微信隔离）
