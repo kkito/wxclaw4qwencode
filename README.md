@@ -1,33 +1,105 @@
-# OwnClaw - 微信 + AgentScope + ACP 集成
+# OwnClaw
 
-基于 AgentScope 框架的微信消息处理集成，支持使用自定义大模型 API 处理微信消息，并通过 ACP 协议连接 `qwen --acp` 进行代码开发。
+微信消息通道 × AgentScope AI 框架 × ACP 开发模式集成。
 
-## 概述
+## 核心功能
 
-OwnClaw 将微信消息通道（openclaw-weixin）与 AgentScope AI Agent 框架连接，实现：
+### 1. ACP 开发模式
 
-- 接收微信用户消息 → 转换为 AgentScope 格式 → AI 处理 → 发送回复
-- 支持自定义模型 API（OpenAI 兼容格式）
-- 斜杠命令系统（可扩展）
-- **ACP 开发模式** — 通过微信连接 `qwen --acp` 进程进行代码开发
-- Cron 定时任务管理
-- Skills 插件能力
-- Web 管理界面
+微信发送 `/acp` 选择项目后进入 coding agent 模式，所有消息直接路由给 qwen CLI，实现对话式开发。
 
-## 架构
+**使用方式：**
+
+| 命令 | 说明 |
+|------|------|
+| `/acp` | 扫描已配置的目录下所有可选项目 |
+| `/acp N` | 通过序号选择项目进入 ACP 会话 |
+| `/acp /path/to/project` | 直接指定路径进入 ACP 会话 |
+| `exit` | 退出 ACP 模式 |
+
+**特点：**
+- **模式切换**：进入后所有消息直接发给 qwen CLI，不再走 AgentScope 流程
+- **流式输出**：累积 3 秒或 200 字符批量发送，避免微信频率限制
+- **自动超时**：30 分钟无活动自动结束会话
+- **权限自动同意**：工具调用（文件读写、shell 命令等）自动允许
+- **Token 统计**：每轮回复后显示输入/输出 token 数
+- **每用户独立进程**：每个微信用户独立的 qwen 进程
+
+**数据流：**
 
 ```
-微信消息
+用户发消息 "帮我查看项目结构"
   │
   ▼
-SlashCommandRouter（前置拦截）
+AcpSessionManager.sendMessage()
   │
-  ├── /acp /path/to/project → ACP 会话 → qwen --acp 子进程 → 流式回复微信
-  │                              │
-  │                              └── exit/quit 或超时 → 返回 AgentScope 流程
-  │
-  └── 其他消息 → WeixinBridge → AgentScope Agent → 微信回复
+  ▼
+AcpClient.sendMessage()
+  ├── spawn qwen --acp 进程
+  ├── 创建 session
+  ├── 发送 prompt
+  └── sessionUpdate 回调（流式输出）
+       ▼
+     AcpWeixinOutput.onSessionUpdate()
+       ├── 缓冲文本
+       ├── 过滤 "正在调用" 等工具调用中间文本
+       └── 达到阈值 → flush 到微信
 ```
+
+详见 [ACP 模式文档](docs/acp-mode.md)。
+
+### 2. Executor 长任务执行器
+
+基于 ACP 的异步任务队列系统，用于执行需要较长时间（最长 30 分钟）的 coding 任务。与 ACP 模式的实时交互不同，Executor 适合批量/异步场景：用户提交任务规格后，系统排队执行，无需用户在线等待。
+
+**两阶段执行流程：**
+
+1. **Stage 1 (initial)**：发送 spec 文件路径 + initial prompt，等待 end_turn
+2. **Stage 2 (confirm)**：发送 confirm prompt "任务是否完成？"，判断是否结束
+
+**任务状态：** `pending → running → completed`，失败时标记为 `failed`。
+
+**管理方式：**
+
+- Web 页面 `/executor`：创建任务、选择项目、选择 spec 文件、自定义 prompt、查看队列、启动/停止执行器、删除/重新入队
+- API：`/api/executor/tasks` CRUD + `/api/executor/start` `/api/executor/stop`
+
+**超时机制：**
+- 30 分钟硬超时
+- 每次收到 session update 重置超时计时器（表示任务仍在运行）
+
+**存储：**
+- `~/.ownclaw/executor/tasks.json` — 任务列表
+- `~/.ownclaw/executor/config.json` — 执行器配置
+
+详见 [Executor 文档](docs/executor.md)。
+
+### 3. AgentScope 聊天机器人
+
+默认对话模式，微信消息经 WeixinBridge 转换后由 AgentScope Agent 处理回复。
+
+**消息流程：**
+
+```
+微信用户发消息
+  │
+  ▼
+WeixinBridge.handleMessage()
+  ├── 提取文本
+  ├── 检查 ACP 会话 → 已路由到 ACP（见功能 1）
+  ├── 斜杠命令前置拦截 → 执行命令 handler
+  └── 正常消息 → AgentScope Agent.reply() → 微信回复
+```
+
+**支持能力：**
+- 文本消息处理（图片/语音/文件/视频暂不支持）
+- 斜杠命令系统（文件驱动，`~/.ownclaw/commands/` 目录可扩展）
+- Skills 自动注入（AgentScope Toolkit，扫描 `~/.ownclaw/skills/`）
+- 发送限流（可配置间隔，避免触发微信 API 频率限制）
+- 自动重试（指数退避，最长 30 分钟）
+- 自定义模型（OpenAI 兼容格式 API）
+
+详见 [AgentScope 文档](docs/agentscope.md)。
 
 ## 快速开始
 
@@ -46,149 +118,38 @@ pnpm run bind
 ### 3. 配置环境变量
 
 ```bash
-# 必需：模型 API 地址
+# 必需
 export AGENT_MODEL_BASE_URL=https://api.example.com/v1
-
-# 必需：API Key
 export AGENT_MODEL_API_KEY=your-api-key
 
-# 可选：模型名称，默认 gpt-4o
+# 可选
 export AGENT_MODEL_NAME=gpt-4o
-
-# 可选：系统提示词
 export AGENT_SYS_PROMPT=你是一个友好的 AI 助手。
 ```
 
 ### 4. 启动
 
 ```bash
-# 前台运行
-pnpm run start
-
-# 后台运行
-pnpm run start -- --detach
+pnpm run start              # 前台运行（仅微信消息服务）
+pnpm run start -- --detach  # 后台运行
+pnpm run web                # 启动 Web 管理界面（http://localhost:3525）
+pnpm run start:all          # 同时启动微信 + Web
 ```
 
-### 5. Web 管理界面
+## Web 管理页面
 
-```bash
-pnpm run web          # 前台
-pnpm run web -- --detach  # 后台
+访问 `http://localhost:3525`：
 
-# 浏览器访问 http://localhost:3525
-```
-
-## 项目结构
-
-```
-src/
-├── config.ts              # 配置加载与 Zod 验证
-├── index.ts               # 统一导出入口
-├── logger.ts              # 日志系统
-├── cli.ts                 # CLI 入口（bind/unbind/status）
-├── start.ts               # 微信消息模式启动脚本
-├── start-web.ts           # Web 服务器启动脚本
-├── example.ts             # 使用示例
-├── model/
-│   └── custom-model.ts    # 自定义模型客户端 (继承 ChatModelBase)
-├── bridge/
-│   └── weixin-bridge.ts   # 微信消息 ↔ AgentScope 消息转换
-├── runner/
-│   └── agent-runner.ts    # Agent 生命周期管理
-├── acp/                   # ACP 客户端模块
-│   ├── client.ts          # AcpClient 高层封装
-│   ├── connection.ts      # qwen --acp 进程连接管理
-│   ├── handlers.ts        # 权限请求和会话更新处理
-│   ├── output.ts          # 终端输出格式化
-│   └── types.ts           # 类型定义
-├── acp-session/           # ACP 微信会话管理
-│   ├── session.ts         # 单个 ACP 会话封装
-│   ├── manager.ts         # 多用户会话管理
-│   ├── output.ts          # ACP 流式输出 → 微信消息
-│   └── index.ts           # 统一导出
-├── slash-command/         # 斜杠命令通用框架
-│   ├── registry.ts        # 命令注册表
-│   ├── loader.ts          # 从文件系统加载命令
-│   └── index.ts           # 统一导出
-├── cron/                  # Cron 定时任务
-│   ├── manager.ts         # 调度管理
-│   ├── store.ts           # 文件存储
-│   └── executor.ts        # 命令执行
-├── skills/                # Skills 插件
-│   ├── manager.ts         # Skills 管理和 Toolkit 创建
-│   └── store.ts           # 文件存储
-└── web/                   # Web 管理界面
-    ├── server.tsx         # Hono 服务器
-    └── views/             # 页面组件
-```
-
-## 功能使用
-
-### 微信 AI 对话
-
-启动后，微信用户直接发消息即可与 AI 对话。
-
-### ACP 开发模式
-
-通过 `/acp` 命令进入 ACP 模式，连接 `qwen --acp` 进程进行代码开发：
-
-```
-# 进入 ACP 模式（必须指定项目路径）
-/acp /home/kkito/proj/myapp
-
-# 进入后，所有消息都会转发给 qwen --acp 处理
-# 例如：
-帮我查看当前项目结构
-在这个目录下创建一个 main.py 文件
-
-# 退出 ACP 模式
-exit
-# 或
-quit
-```
-
-**ACP 模式特点：**
-- 每次回复前会显示 `[ACP 模式] 工作目录: /path/to/project`
-- 支持流式输出（累积 3 秒或 200 字符批量发送）
-- 30 分钟无消息自动退出
-- 每个微信用户独立的 ACP 进程
-
-### 斜杠命令
-
-OwnClaw 采用文件驱动的斜杠命令架构。命令存储在 `~/.ownclaw/commands/` 目录，每个子目录一个命令：
-
-```
-~/.ownclaw/commands/
-├── acp/
-│   ├── COMMAND.md    # 命令元数据
-│   └── handler.ts    # 处理逻辑
-└── ...               # 未来可扩展更多命令
-```
-
-当前支持的命令：
-
-| 命令 | 说明 |
+| 路径 | 说明 |
 |------|------|
-| `/acp /path/to/project` | 进入 ACP 开发模式 |
-| `/echo <message>` | 直接回复（openclaw-weixin 内置） |
-| `/toggle-debug` | 切换调试模式（openclaw-weixin 内置） |
+| `/` | 首页 |
+| `/cron` | Cron 定时任务管理 |
+| `/executor` | 长任务队列管理 |
+| `/skills` | Skills 插件管理 |
+| `/settings` | 系统设置（发送限流等） |
+| `/acp-dirs` | ACP 项目目录配置 |
 
-### Cron 定时任务
-
-通过 Web 界面 `/cron` 或 API 管理 bash 脚本定时任务。
-
-### Skills 插件
-
-Skills 存储在 `~/.ownclaw/skills/` 目录，每个 Skill 一个子目录。Agent 启动时自动加载。
-
-### Web 管理界面
-
-访问 `http://localhost:3525` 查看：
-- `/cron` — Cron 定时任务管理
-- `/skills` — Skills 管理
-- `/sysprompt` — 系统提示词管理
-
-## 配置说明
+## 配置
 
 ### 环境变量
 
@@ -199,20 +160,20 @@ Skills 存储在 `~/.ownclaw/skills/` 目录，每个 Skill 一个子目录。Ag
 | `AGENT_MODEL_NAME` | 否 | `gpt-4o` | 模型名称 |
 | `AGENT_SYS_PROMPT` | 否 | `你是一个友好的 AI 助手。` | 系统提示词 |
 | `OWNCLAW_WEB_PORT` | 否 | `3525` | Web 服务器端口 |
-| `OWNCLAW_WEB_HOST` | 否 | `0.0.0.0` | Web 服务器地址 |
 | `OWNCLAW_STATE_DIR` | 否 | `~/.ownclaw` | 状态存储目录 |
 
-### 配置文件位置
+### 状态存储
 
 | 路径 | 说明 |
 |------|------|
 | `~/.ownclaw/openclaw-weixin/` | 微信账户配置 |
-| `~/.ownclaw/cron/jobs.json` | Cron 任务列表 |
-| `~/.ownclaw/skills/` | Skills 目录 |
+| `~/.ownclaw/cron/jobs.json` + `logs/` | Cron 任务及日志 |
+| `~/.ownclaw/executor/tasks.json` | Executor 任务列表 |
+| `~/.ownclaw/skills/` | Skills 插件目录 |
 | `~/.ownclaw/commands/` | 斜杠命令目录 |
-| `~/.ownclaw/sysprompt` | 系统提示词 |
+| `~/.ownclaw/acp-dirs.json` | ACP 项目目录配置 |
 
-## CLI 命令
+## CLI
 
 ```bash
 pnpm run bind      # 绑定微信
@@ -229,20 +190,55 @@ pnpm run test        # 运行测试
 pnpm run typecheck   # 类型检查
 ```
 
-## 测试
+## 项目结构
 
-OwnClaw 包含三层测试体系，详见 [测试指南](docs/testing.md)：
-
-| 层次 | 位置 | 说明 |
-|---|---|---|
-| 单元测试 | `tests/` 下各模块 | 测单个函数/类，mock 所有依赖 |
-| Web 路由测试 | `tests/web/*.test.ts` | 通过 `app.request()` 测完整 Hono 应用（页面+API） |
-| TSX 组件测试 | `tests/web/index.test.ts` | 直接 `jsx()` 渲染单个组件 |
-
-```bash
-pnpm run test:run      # 运行全部 259 个用例
-npx vitest run tests/web/  # 只运行 Web 相关测试
 ```
+src/
+├── config.ts              # 配置加载与 Zod 验证
+├── logger.ts              # 日志系统
+├── cli.ts / cli/          # CLI 入口（bind/unbind/status）
+├── start.ts               # 微信服务启动脚本
+├── start-web.ts           # Web 服务器启动脚本
+├── start-all.ts           # 统一启动（微信 + Web）
+├── model/
+│   └── custom-model.ts    # 自定义模型客户端
+├── bridge/
+│   └── weixin-bridge.ts   # 微信消息 ↔ AgentScope 消息转换
+├── runner/
+│   └── agent-runner.ts    # Agent 生命周期管理
+├── acp/                   # ACP 客户端（qwen 进程连接）
+├── acp-session/           # ACP 会话管理（per-user，超时清理）
+├── acp-config/            # ACP 项目目录配置（扫描/选择）
+├── commands/              # 斜杠命令实现
+├── slash-command/         # 斜杠命令框架（注册/加载）
+├── executor/              # 长任务执行器（基于 ACP 的队列）
+├── cron/                  # Cron 定时任务
+├── skills/                # Skills 插件管理
+├── config-store.ts        # 通用配置存储（发送限流等）
+└── web/                   # Web 管理界面（Hono）
+```
+
+## 其他模块
+
+| 模块 | 说明 | 存储位置 |
+|------|------|---------|
+| **Cron 定时任务** | 管理 bash 脚本定时执行 | `~/.ownclaw/cron/jobs.json` + `logs/` |
+| **Skills 管理** | 创建/编辑/安装 Skills，注入 AgentScope Toolkit | `~/.ownclaw/skills/` |
+| **斜杠命令系统** | 动态加载 `~/.ownclaw/commands/` 下的命令 | `COMMAND.md` + `handler.js` |
+| **发送限流** | 控制微信 sendMessage 频率间隔 | config-store.json |
+
+## 文档
+
+| 文档 | 说明 |
+|------|------|
+| [ACP 模式](docs/acp-mode.md) | ACP 开发模式架构、使用方式、数据流 |
+| [Executor](docs/executor.md) | 长任务执行器架构、API、超时机制 |
+| [AgentScope](docs/agentscope.md) | AgentScope 框架集成 |
+| [斜杠命令](docs/weixin-slash-commands.md) | 斜杠命令架构 |
+| [ACP 协议](docs/acp-protocol.md) | ACP 数据协议详解 |
+| [微信核心](docs/openclaw-weixin-core.md) | 微信通道 API |
+| [微信群支持](docs/weixin-group-support.md) | 群消息处理 |
+| [测试指南](docs/testing.md) | 测试体系说明 |
 
 ## 依赖
 
@@ -252,16 +248,6 @@ npx vitest run tests/web/  # 只运行 Web 相关测试
 - `zod` — 配置验证
 - `hono` — Web 框架
 - `node-cron` — 定时任务调度
-
-## 文档
-
-- [ACP 协议规范](docs/acp-protocol.md) — ACP 数据协议详解
-- [AgentScope 框架](docs/agentscope.md) — AgentScope 核心概念
-- [OpenClaw 微信核心](docs/openclaw-weixin-core.md) — 微信通道 API
-- [斜杠命令](docs/weixin-slash-commands.md) — 斜杠命令架构
-- [微信群支持](docs/weixin-group-support.md) — 群消息处理
-- [测试指南](docs/testing.md) — 测试体系说明
-- [TODO](docs/TODO.md) — 待办事项
 
 ## License
 
