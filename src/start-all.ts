@@ -15,6 +15,7 @@ import { parseArgs } from 'util';
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadChannelConfig } from './config-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +24,7 @@ const distDir = path.resolve(__dirname);
 // 颜色前缀（终端输出区分）
 const WX_PREFIX = '\x1b[32m[WeChat]\x1b[0m ';   // 绿色
 const WEB_PREFIX = '\x1b[36m[Web]   \x1b[0m ';   // 青色
+const WECOM_PREFIX = '\x1b[35m[WeCom] \x1b[0m '; // 紫色
 
 function prefixStream(prefix: string, stream: NodeJS.ReadableStream | null): void {
   if (!stream) return;
@@ -39,6 +41,7 @@ function startAll(): void {
   const nodePath = process.execPath;
   const weixinScript = path.join(distDir, 'start.js');
   const webScript = path.join(distDir, 'start-web.js');
+  const wecomScript = path.join(distDir, 'start-wecom.js');
 
   console.log('\n🚀 正在启动 OwnClaw（微信 + Web）...\n');
 
@@ -63,6 +66,29 @@ function startAll(): void {
   prefixStream(WX_PREFIX, weixinProc.stderr);
   prefixStream(WEB_PREFIX, webProc.stdout);
   prefixStream(WEB_PREFIX, webProc.stderr);
+
+  // 启动企业微信（如果已启用）
+  let wecomProc: ChildProcess | null = null;
+  loadChannelConfig().then((channelConfig) => {
+    if (channelConfig.wecom?.enabled && channelConfig.wecom.botId && channelConfig.wecom.secret) {
+      console.log('🤖 企业微信通道已启用，正在启动...\n');
+      wecomProc = spawn(nodePath, [wecomScript], {
+        stdio: ['inherit', 'pipe', 'pipe'],
+        env: process.env,
+      });
+      processes.push(wecomProc);
+      prefixStream(WECOM_PREFIX, wecomProc.stdout);
+      prefixStream(WECOM_PREFIX, wecomProc.stderr);
+
+      wecomProc.on('exit', (code) => {
+        if (!shuttingDown) {
+          shutdownAll('SIGTERM', code, '企业微信服务');
+        }
+      });
+    }
+  }).catch((err) => {
+    console.error('加载企业微信配置失败:', err);
+  });
 
   // 任一子进程退出时，关闭所有进程
   let shuttingDown = false;

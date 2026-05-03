@@ -60,6 +60,10 @@ describe('config-store', () => {
       const result = await loadConfig();
       expect(result).toEqual({
         sendThrottleIntervalMs: 5000,
+        channel: {
+          weixin: { enabled: true },
+          wecom: { enabled: false, botId: '', secret: '' },
+        },
       });
     });
 
@@ -76,6 +80,10 @@ describe('config-store', () => {
       const result = await loadConfig();
       expect(result).toEqual({
         sendThrottleIntervalMs: 3000,
+        channel: {
+          weixin: { enabled: true },
+          wecom: { enabled: false, botId: '', secret: '' },
+        },
       });
     });
 
@@ -101,6 +109,10 @@ describe('config-store', () => {
       const result = await loadConfig();
       expect(result).toEqual({
         sendThrottleIntervalMs: 5000,
+        channel: {
+          weixin: { enabled: true },
+          wecom: { enabled: false, botId: '', secret: '' },
+        },
       });
     });
 
@@ -110,6 +122,10 @@ describe('config-store', () => {
       const result = await loadConfig();
       expect(result).toEqual({
         sendThrottleIntervalMs: 5000,
+        channel: {
+          weixin: { enabled: true },
+          wecom: { enabled: false, botId: '', secret: '' },
+        },
       });
     });
   });
@@ -158,6 +174,10 @@ describe('config-store', () => {
     it('should preserve all config fields', async () => {
       const config = {
         sendThrottleIntervalMs: 6000,
+        channel: {
+          weixin: { enabled: true },
+          wecom: { enabled: false, botId: '', secret: '' },
+        },
       };
 
       await saveConfig(config);

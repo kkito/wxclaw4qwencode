@@ -2,12 +2,32 @@ import * as fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
+export interface WecomChannelConfig {
+  enabled?: boolean;
+  botId?: string;
+  secret?: string;
+}
+
+export interface WeixinChannelConfig {
+  enabled?: boolean;
+}
+
+export interface ChannelConfig {
+  weixin?: WeixinChannelConfig;
+  wecom?: WecomChannelConfig;
+}
+
 export interface OwnClawConfig {
   sendThrottleIntervalMs?: number;
+  channel?: ChannelConfig;
 }
 
 const DEFAULT_CONFIG: OwnClawConfig = {
   sendThrottleIntervalMs: 5000,
+  channel: {
+    weixin: { enabled: true },
+    wecom: { enabled: false, botId: '', secret: '' },
+  },
 };
 
 /**
@@ -72,4 +92,29 @@ export async function saveSendThrottleInterval(ms: number): Promise<void> {
   const config = await loadConfig();
   config.sendThrottleIntervalMs = ms;
   await saveConfig(config);
+}
+
+/**
+ * Load channel configuration.
+ */
+export async function loadChannelConfig(): Promise<ChannelConfig> {
+  const config = await loadConfig();
+  return config.channel ?? DEFAULT_CONFIG.channel!;
+}
+
+/**
+ * Save channel configuration.
+ */
+export async function saveChannelConfig(channel: ChannelConfig): Promise<void> {
+  const config = await loadConfig();
+  config.channel = channel;
+  await saveConfig(config);
+}
+
+/**
+ * Check if WeCom channel is enabled and has required credentials.
+ */
+export async function isWecomEnabled(): Promise<boolean> {
+  const channel = await loadChannelConfig();
+  return !!(channel.wecom?.enabled && channel.wecom.botId && channel.wecom.secret);
 }

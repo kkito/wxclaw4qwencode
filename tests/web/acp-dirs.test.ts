@@ -10,6 +10,11 @@ vi.mock('../../src/config-store.js', () => ({
   saveConfig: () => Promise.resolve(),
   loadSendThrottleInterval: () => Promise.resolve(5000),
   saveSendThrottleInterval: () => Promise.resolve(),
+  loadChannelConfig: () => Promise.resolve({
+    weixin: { enabled: true },
+    wecom: { enabled: false, botId: '', secret: '' },
+  }),
+  saveChannelConfig: () => Promise.resolve(),
 }));
 
 describe('ACP Dirs Web Pages', () => {

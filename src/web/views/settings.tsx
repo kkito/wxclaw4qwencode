@@ -1,12 +1,20 @@
 import type { FC } from 'hono/jsx';
 import { Hono } from 'hono';
-import { loadSendThrottleInterval, saveSendThrottleInterval } from '../../config-store.js';
+import {
+  loadSendThrottleInterval,
+  saveSendThrottleInterval,
+  loadChannelConfig,
+  saveChannelConfig,
+  type ChannelConfig,
+} from '../../config-store.js';
 import { loadAcpProjectDirs } from '../../acp-config/store.js';
 
 interface SettingsPageProps {
   intervalMs: number;
   acpDirs: string[];
+  channelConfig: ChannelConfig;
   success?: boolean;
+  wecomSaved?: boolean;
 }
 
 const SettingsPage: FC<SettingsPageProps> = (props) => {
@@ -162,6 +170,55 @@ const SettingsPage: FC<SettingsPageProps> = (props) => {
             )}
             <a href="/settings/acp-dirs" class="btn btn-primary" style={{ 'text-decoration': 'none', 'display': 'inline-block' }}>配置 ACP 目录</a>
           </div>
+
+          <div class="card">
+            <h2 style={{ 'font-size': '1.25rem', 'margin-bottom': '1rem' }}>企业微信通道</h2>
+            {props.wecomSaved ? (
+              <div class="alert-success">企业微信配置已保存！</div>
+            ) : null}
+            <form method="post" action="/settings/wecom">
+              <div class="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    name="enabled"
+                    checked={!!props.channelConfig.wecom?.enabled}
+                    style={{ 'margin-right': '0.5rem' }}
+                  />
+                  启用企业微信
+                </label>
+                <p class="hint">启用后，OwnClaw 将通过企业微信 WebSocket 连接接收和发送消息。</p>
+              </div>
+              <div class="form-group">
+                <label for="botId">Bot ID</label>
+                <input
+                  type="text"
+                  id="botId"
+                  name="botId"
+                  value={props.channelConfig.wecom?.botId || ''}
+                  placeholder="请输入企业微信 Bot ID"
+                />
+                <p class="hint">企业微信机器人的唯一标识。</p>
+              </div>
+              <div class="form-group">
+                <label for="secret">Secret</label>
+                <input
+                  type="password"
+                  id="secret"
+                  name="secret"
+                  value={props.channelConfig.wecom?.secret || ''}
+                  placeholder="请输入企业微信 Bot Secret"
+                />
+                <p class="hint">企业微信机器人的密钥。</p>
+              </div>
+              <button type="submit" class="btn btn-primary">保存</button>
+            </form>
+            <div style={{ 'margin-top': '1rem', 'font-size': '0.875rem', 'color': 'hsl(var(--muted-foreground))' }}>
+              状态：{props.channelConfig.wecom?.enabled && props.channelConfig.wecom.botId && props.channelConfig.wecom.secret
+                ? '🟢 已配置（重启后生效）'
+                : '⚪ 未启用'}
+            </div>
+          </div>
         </div>
       </body>
     </html>
@@ -174,8 +231,10 @@ export function createSettingsRouter() {
   app.get('/', async (c) => {
     const intervalMs = await loadSendThrottleInterval();
     const acpDirs = await loadAcpProjectDirs();
+    const channelConfig = await loadChannelConfig();
     const saved = c.req.query('saved') === '1';
-    return c.html(<SettingsPage intervalMs={intervalMs} acpDirs={acpDirs} success={saved} />);
+    const wecomSaved = c.req.query('wecom') === '1';
+    return c.html(<SettingsPage intervalMs={intervalMs} acpDirs={acpDirs} channelConfig={channelConfig} success={saved} wecomSaved={wecomSaved} />);
   });
 
   app.post('/', async (c) => {
@@ -189,6 +248,19 @@ export function createSettingsRouter() {
 
     await saveSendThrottleInterval(intervalMs);
     return c.redirect('/settings?saved=1', 302);
+  });
+
+  // 企业微信配置提交
+  app.post('/wecom', async (c) => {
+    const body = await c.req.parseBody();
+    const channel = await loadChannelConfig();
+    channel.wecom = {
+      enabled: body['enabled'] === 'on',
+      botId: (body['botId'] as string) || '',
+      secret: (body['secret'] as string) || '',
+    };
+    await saveChannelConfig(channel);
+    return c.redirect('/settings?wecom=1', 302);
   });
 
   return app;
