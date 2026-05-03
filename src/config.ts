@@ -1,6 +1,18 @@
 import { z } from 'zod';
 import { LogLevel } from './logger';
 
+// Channel 配置 schema
+export const ChannelSchema = z.object({
+  weixin: z.object({
+    enabled: z.boolean().default(true),
+  }).default({ enabled: true }),
+  wecom: z.object({
+    enabled: z.boolean().default(false),
+    botId: z.string().default(''),
+    secret: z.string().default(''),
+  }).default({ enabled: false, botId: '', secret: '' }),
+}).default({ weixin: { enabled: true }, wecom: { enabled: false, botId: '', secret: '' } });
+
 export const ConfigSchema = z.object({
   log: z.object({
     level: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
@@ -14,6 +26,7 @@ export const ConfigSchema = z.object({
     }),
     sysPrompt: z.string().default('你是一个友好的 AI 助手。'),
   }),
+  channel: ChannelSchema,
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -42,6 +55,10 @@ export function loadConfig(): Config {
         modelName,
       },
       sysPrompt,
+    },
+    channel: {
+      weixin: { enabled: true },
+      wecom: { enabled: false, botId: '', secret: '' },
     },
   };
 

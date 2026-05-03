@@ -13,6 +13,7 @@ import { CronManager, CreateJobInput, UpdateJobInput } from '../cron/index.js';
 import { SkillsManager, CreateSkillInput, UpdateSkillInput } from '../skills/index.js';
 import { ExecutorManager } from '../executor/manager.js';
 import { loadAcpProjectDirs, saveAcpProjectDirs } from '../acp-config/store.js';
+import { loadChannelConfig, saveChannelConfig, type ChannelConfig } from '../config-store.js';
 
 export interface WebServerConfig {
   port: number;
@@ -252,6 +253,22 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
       }
       await saveAcpProjectDirs(body.dirs);
       return c.json({ dirs: body.dirs });
+    } catch (error: unknown) {
+      return c.json({ error: 'Invalid request' }, 400);
+    }
+  });
+
+  // ===== Channel Config API =====
+  app.get('/api/settings/channel', async (c) => {
+    const channel = await loadChannelConfig();
+    return c.json({ channel });
+  });
+
+  app.put('/api/settings/channel', async (c) => {
+    try {
+      const body = await c.req.json<{ channel: ChannelConfig }>();
+      await saveChannelConfig(body.channel);
+      return c.json({ channel: body.channel });
     } catch (error: unknown) {
       return c.json({ error: 'Invalid request' }, 400);
     }
