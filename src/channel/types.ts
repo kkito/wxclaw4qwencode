@@ -3,7 +3,7 @@
  * 用于在不同消息通道（微信、企业微信等）之间统一消息格式
  */
 
-export type ChannelType = 'weixin' | 'wecom';
+export type ChannelType = 'weixin' | 'wecom' | 'feishu';
 
 export interface ChannelMessage {
   /** 发送者 ID */

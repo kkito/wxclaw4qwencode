@@ -8,6 +8,12 @@ export interface WecomChannelConfig {
   secret?: string;
 }
 
+export interface FeishuChannelConfig {
+  enabled?: boolean;
+  appId?: string;
+  appSecret?: string;
+}
+
 export interface WeixinChannelConfig {
   enabled?: boolean;
 }
@@ -15,6 +21,7 @@ export interface WeixinChannelConfig {
 export interface ChannelConfig {
   weixin?: WeixinChannelConfig;
   wecom?: WecomChannelConfig;
+  feishu?: FeishuChannelConfig;
 }
 
 export interface OwnClawConfig {
@@ -27,6 +34,7 @@ const DEFAULT_CONFIG: OwnClawConfig = {
   channel: {
     weixin: { enabled: true },
     wecom: { enabled: false, botId: '', secret: '' },
+    feishu: { enabled: false, appId: '', appSecret: '' },
   },
 };
 
@@ -117,4 +125,9 @@ export async function saveChannelConfig(channel: ChannelConfig): Promise<void> {
 export async function isWecomEnabled(): Promise<boolean> {
   const channel = await loadChannelConfig();
   return !!(channel.wecom?.enabled && channel.wecom.botId && channel.wecom.secret);
+}
+
+export async function isFeishuEnabled(): Promise<boolean> {
+  const channel = await loadChannelConfig();
+  return !!(channel.feishu?.enabled && channel.feishu.appId && channel.feishu.appSecret);
 }

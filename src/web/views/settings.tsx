@@ -15,6 +15,7 @@ interface SettingsPageProps {
   channelConfig: ChannelConfig;
   success?: boolean;
   wecomSaved?: boolean;
+  feishuSaved?: boolean;
 }
 
 const SettingsPage: FC<SettingsPageProps> = (props) => {
@@ -219,6 +220,55 @@ const SettingsPage: FC<SettingsPageProps> = (props) => {
                 : '⚪ 未启用'}
             </div>
           </div>
+
+          <div class="card">
+            <h2 style={{ 'font-size': '1.25rem', 'margin-bottom': '1rem' }}>飞书通道</h2>
+            {props.feishuSaved ? (
+              <div class="alert-success">飞书配置已保存！</div>
+            ) : null}
+            <form method="post" action="/settings/feishu">
+              <div class="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    name="enabled"
+                    checked={!!props.channelConfig.feishu?.enabled}
+                    style={{ 'margin-right': '0.5rem' }}
+                  />
+                  启用飞书
+                </label>
+                <p class="hint">启用后，OwnClaw 将通过飞书 WebSocket 连接接收和发送消息。</p>
+              </div>
+              <div class="form-group">
+                <label for="appId">App ID</label>
+                <input
+                  type="text"
+                  id="appId"
+                  name="appId"
+                  value={props.channelConfig.feishu?.appId || ''}
+                  placeholder="请输入飞书 App ID"
+                />
+                <p class="hint">飞书企业自建应用的 App ID。</p>
+              </div>
+              <div class="form-group">
+                <label for="appSecret">App Secret</label>
+                <input
+                  type="password"
+                  id="appSecret"
+                  name="appSecret"
+                  value={props.channelConfig.feishu?.appSecret || ''}
+                  placeholder="请输入飞书 App Secret"
+                />
+                <p class="hint">飞书企业自建应用的 App Secret。</p>
+              </div>
+              <button type="submit" class="btn btn-primary">保存</button>
+            </form>
+            <div style={{ 'margin-top': '1rem', 'font-size': '0.875rem', 'color': 'hsl(var(--muted-foreground))' }}>
+              状态：{props.channelConfig.feishu?.enabled && props.channelConfig.feishu.appId && props.channelConfig.feishu.appSecret
+                ? '🟢 已配置（重启后生效）'
+                : '⚪ 未启用'}
+            </div>
+          </div>
         </div>
       </body>
     </html>
@@ -234,7 +284,8 @@ export function createSettingsRouter() {
     const channelConfig = await loadChannelConfig();
     const saved = c.req.query('saved') === '1';
     const wecomSaved = c.req.query('wecom') === '1';
-    return c.html(<SettingsPage intervalMs={intervalMs} acpDirs={acpDirs} channelConfig={channelConfig} success={saved} wecomSaved={wecomSaved} />);
+    const feishuSaved = c.req.query('feishu') === '1';
+    return c.html(<SettingsPage intervalMs={intervalMs} acpDirs={acpDirs} channelConfig={channelConfig} success={saved} wecomSaved={wecomSaved} feishuSaved={feishuSaved} />);
   });
 
   app.post('/', async (c) => {
@@ -261,6 +312,19 @@ export function createSettingsRouter() {
     };
     await saveChannelConfig(channel);
     return c.redirect('/settings?wecom=1', 302);
+  });
+
+  // 飞书配置提交
+  app.post('/feishu', async (c) => {
+    const body = await c.req.parseBody();
+    const channel = await loadChannelConfig();
+    channel.feishu = {
+      enabled: body['enabled'] === 'on',
+      appId: (body['appId'] as string) || '',
+      appSecret: (body['appSecret'] as string) || '',
+    };
+    await saveChannelConfig(channel);
+    return c.redirect('/settings?feishu=1', 302);
   });
 
   return app;
