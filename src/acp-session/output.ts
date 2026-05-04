@@ -69,11 +69,12 @@ export class AcpWeixinOutput {
     this.stopHeartbeat(userId);
   }
 
-  flush(userId: string, sendMessage: (msg: string) => Promise<void>): void {
+  flush(userId: string, sendMessage: (msg: string) => Promise<void>): Promise<void> {
     const buf = this.buffers.get(userId);
     if (buf && buf.text.length > 0) {
-      this.flushBuffer(buf, userId, sendMessage);
+      return this.flushBuffer(buf, userId, sendMessage);
     }
+    return Promise.resolve();
   }
 
   onSessionUpdate(update: SessionUpdate, userId: string, sendMessage: (msg: string) => Promise<void>): void {
@@ -129,22 +130,22 @@ export class AcpWeixinOutput {
     }, this.options.flushIntervalMs);
   }
 
-  private flushBuffer(buf: UserBuffer, userId: string, sendMessage: (msg: string) => Promise<void>): void {
+  private flushBuffer(buf: UserBuffer, userId: string, sendMessage: (msg: string) => Promise<void>): Promise<void> {
     if (buf.timer) {
       clearTimeout(buf.timer);
       buf.timer = null;
     }
-    if (buf.text.length === 0) return;
+    if (buf.text.length === 0) return Promise.resolve();
     // 统一出口过滤：完整文本中包含"正在调用"则丢弃，不发到微信
     if (buf.text.includes('正在调用')) {
       buf.text = '';
-      return;
+      return Promise.resolve();
     }
     const msg = this.options.prefix + buf.text;
-    sendMessage(msg).then(() => {
+    buf.text = '';
+    return sendMessage(msg).then(() => {
       this.recordSent(userId);
     }).catch(() => {});
-    buf.text = '';
   }
 
   private extractText(content: unknown): string {

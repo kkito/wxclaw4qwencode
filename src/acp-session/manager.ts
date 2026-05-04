@@ -150,7 +150,7 @@ export class AcpSessionManager {
       }
 
       // Flush any remaining output after prompt completes
-      session.output.flush(userId, sendToWeixin);
+      await session.output.flush(userId, sendToWeixin);
 
       // 停止心跳，表示本轮对话结束
       session.output.stopHeartbeat(userId);
