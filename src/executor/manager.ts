@@ -57,27 +57,39 @@ export class ExecutorManager {
     this.isExecuting = true;
 
     try {
+      const now = new Date().toISOString();
       this.store.updateTask(task.id, {
         status: 'running',
-        startedAt: null,
+        startedAt: now,
+        updatedAt: now,
+        latestOutput: null,
       });
 
       const config = this.store.loadConfig();
-      const result = await this.runner.run(task, config, (text: string) => {
-        console.error(`[Executor ${task.id}] ${text.slice(0, 100)}`);
+      let latestOutput: string | null = null;
+      const result = await this.runner.run(task, config, (progress) => {
+        latestOutput = progress.latestOutput;
+        this.store.updateTask(task.id, {
+          updatedAt: progress.updatedAt,
+          latestOutput: progress.latestOutput,
+        });
       });
 
       this.store.updateTask(task.id, {
         status: result.status,
         startedAt: result.startedAt,
         endedAt: result.endedAt,
+        updatedAt: result.endedAt,
+        latestOutput: latestOutput,
         result: result.result ?? null,
         confirmResponse: result.confirmResponse ?? null,
       });
     } catch (error: unknown) {
+      const endedAt = new Date().toISOString();
       this.store.updateTask(task.id, {
         status: 'failed',
-        endedAt: new Date().toISOString(),
+        endedAt,
+        updatedAt: endedAt,
         result: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -98,6 +110,8 @@ export class ExecutorManager {
       result: null,
       confirmResponse: null,
       createdAt: new Date().toISOString(),
+      updatedAt: null,
+      latestOutput: null,
     };
     this.store.addTask(task);
     return task;
@@ -134,6 +148,8 @@ export class ExecutorManager {
       status: 'pending',
       startedAt: null,
       endedAt: null,
+      updatedAt: null,
+      latestOutput: null,
       result: null,
       confirmResponse: null,
     });

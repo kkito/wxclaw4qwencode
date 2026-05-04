@@ -1,5 +1,5 @@
 import { AcpClient } from '../acp/client.js';
-import type { LongTask, ExecutorConfig } from './types.js';
+import type { LongTask, ExecutorConfig, TaskProgress } from './types.js';
 import type { PromptResponse, SessionUpdate } from '@agentclientprotocol/sdk';
 
 export interface TaskResult {
@@ -16,7 +16,7 @@ export class ExecutorRunner {
   async run(
     task: LongTask,
     config: ExecutorConfig,
-    onOutput?: (text: string) => void,
+    onProgress?: (progress: TaskProgress) => void,
   ): Promise<TaskResult> {
     const startedAt = new Date().toISOString();
     const client = new AcpClient({ cwd: task.projectId, autoApprove: true });
@@ -52,8 +52,11 @@ export class ExecutorRunner {
           } else {
             confirmAccumulatedText += content.text;
           }
-          if (onOutput) {
-            onOutput(content.text);
+          if (onProgress) {
+            onProgress({
+              updatedAt: new Date().toISOString(),
+              latestOutput: accumulatedText.slice(-200),
+            });
           }
           // Reset timeout on each update — activity means the task is still alive
           resetTimeout();

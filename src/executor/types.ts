@@ -1,5 +1,10 @@
 export type TaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'timeout';
 
+export interface TaskProgress {
+  updatedAt: string;
+  latestOutput: string;
+}
+
 export interface LongTask {
   id: string;
   projectId: string;
@@ -12,6 +17,8 @@ export interface LongTask {
   result: string | null;
   confirmResponse: string | null;
   createdAt: string;
+  updatedAt: string | null;
+  latestOutput: string | null;
 }
 
 export interface ExecutorConfig {

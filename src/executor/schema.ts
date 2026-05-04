@@ -12,6 +12,8 @@ export const LongTaskSchema = z.object({
   result: z.string().nullable(),
   confirmResponse: z.string().nullable(),
   createdAt: z.string().datetime(),
+  updatedAt: z.string().nullable(),
+  latestOutput: z.string().nullable(),
 });
 
 export const ExecutorConfigSchema = z.object({
