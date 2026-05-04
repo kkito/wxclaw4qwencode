@@ -72,7 +72,7 @@ async function startFeishu(): Promise<void> {
   // 加载配置
   let config: Config;
   try {
-    config = loadConfig();
+    config = await loadConfig();
   } catch (error) {
     console.error('配置加载失败:', error);
     process.exit(1);
@@ -156,7 +156,7 @@ handler: ./handler.js
 
   // 创建 Agent（独立实例，与微信隔离）
   const model = new CustomModel({
-    baseUrl: config.agentscope.model.baseUrl,
+    baseUrl: config.agentscope.model.baseUrl ?? '',
     apiKey: config.agentscope.model.apiKey,
     modelName: config.agentscope.model.modelName,
   });

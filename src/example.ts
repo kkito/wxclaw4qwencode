@@ -1,4 +1,4 @@
-import { createAgentRunner, createLogger, LogLevel, SendMessageOptions, MessageState } from './index';
+import { createAgentRunner, createLogger, LogLevel, SendMessageOptions, MessageState } from './index.js';
 
 /**
  * 使用示例

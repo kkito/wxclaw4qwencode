@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { LogLevel } from './logger';
-import { loadModelConfig } from './config-store';
+import { LogLevel } from './logger.js';
+import { loadModelConfig } from './config-store.js';
 
 // Channel 配置 schema
 export const ChannelSchema = z.object({
