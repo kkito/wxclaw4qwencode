@@ -14,6 +14,7 @@ interface ActiveSession {
   lastActivity: Date;
   output: AcpWeixinOutput;
   timeoutTimer: ReturnType<typeof setTimeout> | null;
+  abortController: AbortController | null;
 }
 
 export class AcpSessionManager {
@@ -67,6 +68,7 @@ export class AcpSessionManager {
       lastActivity: new Date(),
       output,
       timeoutTimer: null,
+      abortController: null,
     };
 
     this.sessions.set(userId, session);
@@ -82,6 +84,11 @@ export class AcpSessionManager {
     if (!session) {
       await sendToWeixin?.('⚠️ 当前不在 ACP 模式中');
       return;
+    }
+
+    // 取消正在进行的请求
+    if (session.abortController) {
+      session.abortController.abort();
     }
 
     if (session.timeoutTimer) {
@@ -107,26 +114,66 @@ export class AcpSessionManager {
       return;
     }
 
-    this.updateActivity(userId);
-    const result = await session.client.sendMessage(message);
-
-    // 显示 token 使用信息
-    if (result.usage) {
-      const usage = result.usage as Record<string, unknown>;
-      const inputTokens = usage.input_tokens ?? 'N/A';
-      const outputTokens = usage.output_tokens ?? 'N/A';
-      await sendToWeixin(`\n📊 Token 使用:\n输入: ${inputTokens} tokens\n输出: ${outputTokens} tokens`);
+    // 如果已经有正在进行的请求，先取消它
+    if (session.abortController) {
+      session.abortController.abort();
     }
 
-    // Flush any remaining output after prompt completes
-    session.output.flush(userId, sendToWeixin);
+    // 创建新的 AbortController
+    session.abortController = new AbortController();
+    const { signal } = session.abortController;
 
-    // 发送完成标识，标记大模型本轮回复已结束
-    if (result.stopReason) {
-      const msg = result.stopReason === 'cancelled'
-        ? '\n---\n⛔ ACP 任务已取消'
-        : `\n---\n✅ ACP 回复完成 (停止原因: ${result.stopReason})`;
-      await sendToWeixin(msg);
+    this.updateActivity(userId);
+
+    // 启动心跳，表示本轮对话开始
+    session.output.startHeartbeat(userId, sendToWeixin);
+
+    // 监听 abort 事件，触发 ACP cancel
+    const cancelHandler = async () => {
+      try {
+        await session.client.cancel();
+      } catch (err) {
+        console.error(`[ACP] 取消失败: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    signal.addEventListener('abort', cancelHandler, { once: true });
+
+    try {
+      const result = await session.client.sendMessage(message);
+
+      // 显示 token 使用信息
+      if (result.usage) {
+        const usage = result.usage as Record<string, unknown>;
+        const inputTokens = usage.input_tokens ?? 'N/A';
+        const outputTokens = usage.output_tokens ?? 'N/A';
+        await sendToWeixin(`\n📊 Token 使用:\n输入: ${inputTokens} tokens\n输出: ${outputTokens} tokens`);
+      }
+
+      // Flush any remaining output after prompt completes
+      session.output.flush(userId, sendToWeixin);
+
+      // 停止心跳，表示本轮对话结束
+      session.output.stopHeartbeat(userId);
+
+      // 发送完成标识，标记大模型本轮回复已结束
+      if (result.stopReason) {
+        const msg = result.stopReason === 'cancelled'
+          ? '\n---\n⛔ ACP 任务已取消'
+          : `\n---\n✅ ACP 回复完成 (停止原因: ${result.stopReason})`;
+        await sendToWeixin(msg);
+      }
+    } catch (err) {
+      // 停止心跳
+      session.output.stopHeartbeat(userId);
+      // 如果是被取消的，不需要报错
+      if (signal.aborted) {
+        console.error(`[ACP] 消息发送被取消`);
+      } else {
+        throw err;
+      }
+    } finally {
+      signal.removeEventListener('abort', cancelHandler);
+      session.abortController = null;
     }
   }
 
@@ -140,10 +187,22 @@ export class AcpSessionManager {
       return;
     }
 
+    const hadActiveTask = !!session.abortController;
+
+    // 如果有正在进行中的请求，中断它
+    if (session.abortController) {
+      session.abortController.abort();
+      await sendToWeixin('⛔ 正在取消 ACP 任务...');
+    }
+
+    // 无论如何都调用 client.cancel，确保 ACP 服务端收到取消通知
     try {
       await session.client.cancel();
+      if (!hadActiveTask) {
+        await sendToWeixin('ℹ️ 当前没有正在进行的 ACP 任务');
+      }
     } catch (err) {
-      await sendToWeixin(`❌ 取消失败: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`[ACP] 取消失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

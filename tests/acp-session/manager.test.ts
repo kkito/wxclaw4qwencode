@@ -136,15 +136,43 @@ describe('AcpSessionManager', () => {
     expect(manager.hasActiveSession('user1')).toBe(true);
   });
 
-  it('cancelTask sends cancel to client', async () => {
+  it('cancelTask sends cancel to client when no active message', async () => {
     await manager.createSession('user1', '/test', sendMock);
+    // 当没有正在进行的发送任务时，cancelTask 应该直接调用 client.cancel
     await manager.cancelTask('user1', sendMock);
-    // cancel should have been called on the mock client
     expect(_lastMockClient._cancelCalled).toBe(true);
   });
 
   it('cancelTask for non-existent session warns', async () => {
     await manager.cancelTask('nobody', sendMock);
     expect(sendMock).toHaveBeenCalledWith(expect.stringContaining('不在 ACP 模式中'));
+  });
+
+  it('sendMessage starts and stops heartbeat on success', async () => {
+    await manager.createSession('user1', '/test', sendMock);
+    await manager.sendMessage('user1', 'hello', sendMock);
+
+    // sendMessage 完成后心跳应该被停止
+    const session = (manager as any).sessions.get('user1');
+    const heartbeat = session.output['heartbeats'].get('user1');
+    expect(heartbeat).toBeUndefined();
+  });
+
+  it('sendMessage stops heartbeat on cancel', async () => {
+    await manager.createSession('user1', '/test', sendMock);
+
+    // 模拟被取消的响应
+    const mockClient = _lastMockClient;
+    mockClient.sendMessage = vi.fn().mockResolvedValue({
+      usage: {},
+      stopReason: 'cancelled',
+    });
+
+    await manager.sendMessage('user1', 'hello', sendMock);
+
+    // 取消后心跳应该被停止
+    const session = (manager as any).sessions.get('user1');
+    const heartbeat = session.output['heartbeats'].get('user1');
+    expect(heartbeat).toBeUndefined();
   });
 });

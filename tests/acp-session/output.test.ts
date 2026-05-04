@@ -85,3 +85,96 @@ describe('AcpWeixinOutput', () => {
     expect(output['buffers'].has('user1')).toBe(false);
   });
 });
+
+describe('AcpWeixinOutput heartbeat', () => {
+  let output: AcpWeixinOutput;
+  let sendMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    output = new AcpWeixinOutput({
+      prefix: '[ACP]\n',
+      flushIntervalMs: 3000,
+      flushThresholdChars: 200,
+    });
+    sendMock = vi.fn().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('startHeartbeat begins tracking activity', () => {
+    output.startHeartbeat('user1', sendMock);
+    expect(output['heartbeats'].has('user1')).toBe(true);
+  });
+
+  it('sends heartbeat message after 5 minutes of inactivity', () => {
+    output.startHeartbeat('user1', sendMock);
+    sendMock.mockClear();
+
+    // 心跳检查间隔 60 秒，超时 5 分钟
+    vi.advanceTimersByTime(60 * 1000); // 第一次检查，未到 5 分钟
+    expect(sendMock).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(4 * 60 * 1000); // 总共 5 分钟
+    vi.advanceTimersByTime(60 * 1000); // 触发检查
+    expect(sendMock).toHaveBeenCalledWith('⏳ 仍在工作中...');
+  });
+
+  it('sends heartbeat only once per activity period', () => {
+    output.startHeartbeat('user1', sendMock);
+    sendMock.mockClear();
+
+    // 推进到触发心跳
+    vi.advanceTimersByTime(6 * 60 * 1000);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+
+    // 继续推进，不应该再次发送
+    vi.advanceTimersByTime(5 * 60 * 1000);
+    vi.advanceTimersByTime(60 * 1000);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('recordSent resets heartbeat timer', () => {
+    output.startHeartbeat('user1', sendMock);
+
+    // 推进到接近触发
+    vi.advanceTimersByTime(4 * 60 * 1000);
+    vi.advanceTimersByTime(55 * 1000);
+
+    // 模拟发送了消息
+    output.recordSent('user1');
+
+    // 继续推进，不应触发（因为刚重置）
+    vi.advanceTimersByTime(60 * 1000);
+    expect(sendMock).not.toHaveBeenCalled();
+
+    // 再推进 5 分钟才触发
+    vi.advanceTimersByTime(4 * 60 * 1000 + 5 * 1000);
+    vi.advanceTimersByTime(60 * 1000);
+    expect(sendMock).toHaveBeenCalledWith('⏳ 仍在工作中...');
+  });
+
+  it('stopHeartbeat removes tracking and clears timer', () => {
+    output.startHeartbeat('user1', sendMock);
+    expect(output['heartbeats'].has('user1')).toBe(true);
+
+    output.stopHeartbeat('user1');
+    expect(output['heartbeats'].has('user1')).toBe(false);
+
+    // 即使推进时间也不会发送心跳
+    vi.advanceTimersByTime(10 * 60 * 1000);
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it('startHeartbeat is idempotent', () => {
+    output.startHeartbeat('user1', sendMock);
+    const firstState = output['heartbeats'].get('user1');
+
+    output.startHeartbeat('user1', sendMock);
+    const secondState = output['heartbeats'].get('user1');
+
+    expect(firstState).toBe(secondState); // 同一个对象，没有重复创建
+  });
+});
