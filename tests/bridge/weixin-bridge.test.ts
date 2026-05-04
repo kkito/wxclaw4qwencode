@@ -46,6 +46,53 @@ describe('WeixinBridge', () => {
     });
   });
 
+  describe('setAgent', () => {
+    it('should update the agent reference', async () => {
+      const newAgent = {
+        reply: vi.fn().mockResolvedValue(
+          createMsg({
+            name: 'assistant',
+            role: 'assistant',
+            content: [{ type: 'text' as const, text: 'New agent reply', id: '2' }],
+          })
+        ),
+      };
+
+      bridge.setAgent(newAgent);
+
+      const weixinMsg = {
+        from_user_id: 'user123',
+        item_list: [{ type: 1, content: 'Hello' }],
+      };
+      await bridge.handleMessage(weixinMsg);
+
+      expect(newAgent.reply).toHaveBeenCalled();
+      expect(mockAgent.reply).not.toHaveBeenCalled();
+      expect(mockSendMessage).toHaveBeenCalledWith('user123', 'New agent reply');
+    });
+  });
+
+  describe('handleMessage - config pending', () => {
+    it('should return config-pending message when agent is not configured', async () => {
+      const bridgeNoAgent = new WeixinBridge({
+        agent: null as any,
+        sendMessage: mockSendMessage,
+        logger: mockLogger,
+      });
+
+      const weixinMsg = {
+        from_user_id: 'user456',
+        item_list: [{ type: 1, content: 'Hello' }],
+      };
+      await bridgeNoAgent.handleMessage(weixinMsg);
+
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        'user456',
+        '模型配置未完成，请前往设置页面配置。'
+      );
+    });
+  });
+
   describe('handleMessage', () => {
     it('should handle text message and send reply', async () => {
       const weixinMsg = {

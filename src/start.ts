@@ -33,7 +33,7 @@ import { setGlobalSessionManager } from './commands/acp/handler.js';
 import createAcpHandler from './commands/acp/handler.js';
 import createStreamingHandler from './commands/streaming/handler.js';
 import { createSendThrottle } from './utils/send-throttle.js';
-import { loadSendThrottleInterval } from './config-store.js';
+import { loadSendThrottleInterval, loadModelConfig } from './config-store.js';
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url);
@@ -171,64 +171,63 @@ async function sendMessageLib(baseUrl: string, token: string, toUserId: string, 
 // ============== 环境变量检查 ==============
 
 function checkRequiredEnvVars(): void {
-  const required = ['AGENT_MODEL_BASE_URL', 'AGENT_MODEL_API_KEY', 'AGENT_MODEL_NAME'];
-  const missing: string[] = [];
-  
-  for (const key of required) {
-    if (!process.env[key]) {
-      missing.push(key);
+  // AGENT_MODEL_BASE_URL is no longer required at startup
+  // Model config can be loaded from config-store or set via web UI later
+  const optional = ['AGENT_MODEL_BASE_URL', 'AGENT_MODEL_API_KEY', 'AGENT_MODEL_NAME'];
+  const present: string[] = [];
+
+  for (const key of optional) {
+    if (process.env[key]) {
+      present.push(key);
     }
   }
-  
-  if (missing.length > 0) {
-    console.error(`\n❌ 错误: 缺少必需的环境变量: ${missing.join(', ')}\n`);
-    console.error('请设置以下环境变量:');
-    console.error('  AGENT_MODEL_BASE_URL  模型 API 地址 (如 https://api.openai.com/v1)');
-    console.error('  AGENT_MODEL_API_KEY   API Key');
-    console.error('  AGENT_MODEL_NAME      模型名称 (如 gpt-4o)');
-    console.error('  AGENT_SYS_PROMPT      系统提示词 (可选，默认 你是一个友好的 AI 助手。)');
-    console.error('');
-    console.error('示例:');
-    console.error('  export AGENT_MODEL_BASE_URL=https://api.openai.com/v1');
-    console.error('  export AGENT_MODEL_API_KEY=sk-xxx');
-    console.error('  export AGENT_MODEL_NAME=gpt-4o\n');
-    process.exit(1);
+
+  if (present.length > 0) {
+    console.log(`✓ 检测到环境变量: ${present.join(', ')}`);
+  } else {
+    console.log('⚠ 未检测到模型配置环境变量，将从 config.json 加载或稍后通过 Web UI 配置');
   }
-  
-  console.log('✓ 环境变量检查通过');
 }
 
 // ============== 主逻辑 ==============
 
 async function startMain(): Promise<void> {
-  // 检查环境变量
+  // 检查环境变量（不再强制要求 AGENT_MODEL_BASE_URL）
   checkRequiredEnvVars();
-  
-  // 加载配置
+
+  // 加载配置（config.ts 的 loadConfig 已从 config-store 加载 model config 并叠加环境变量）
   let config: Config;
   try {
-    config = loadConfig();
+    config = await loadConfig();
   } catch (error) {
     console.error('配置加载失败:', error);
     process.exit(1);
   }
-  
+
   // 加载微信账户
   const account = loadWeixinAccount();
   if (!account || !account.token || !account.baseUrl) {
     console.error('微信未绑定，请先运行: pnpm run bind');
     process.exit(1);
   }
-  
+
+  const hasModelConfig = !!config.agentscope.model.baseUrl;
+
   // 创建日志器
   const logger: Logger = createLogger({
     level: config.log.level,
     prefix: '[OwnClaw] ',
   });
-  
+
   logger.info('🚀 正在启动 OwnClaw...');
-  logger.info(`📡 模型: ${config.agentscope.model.modelName}`);
-  logger.info(`🌐 API: ${config.agentscope.model.baseUrl}`);
+
+  if (!hasModelConfig) {
+    // 无模型配置：服务以未配置状态启动，可通过 Web UI (/settings/model) 配置
+    logger.warn('⚠ 模型未配置 — 服务以未配置状态启动，可通过 Web UI /settings/model 配置模型');
+  } else {
+    logger.info(`📡 模型: ${config.agentscope.model.modelName}`);
+    logger.info(`🌐 API: ${config.agentscope.model.baseUrl}`);
+  }
   logger.info(`👤 微信: ${account.userId || account.token.substring(0, 10)}...`);
 
   // 创建 SkillsManager
@@ -328,37 +327,45 @@ handler: ./handler.js
     throttleInterval,
   );
 
-  // 创建 AgentRunner
-  let runner: AgentRunner;
-  try {
-    runner = await createAgentRunner({
-      config,
-      logger,
-      weixin: {
-        sendMessage: async (to: string, text: string) => {
-          await throttle.enqueue(to, text);
+  // 创建 AgentRunner（无模型配置时以未配置状态创建）
+  let runner: AgentRunner | undefined;
+  if (!hasModelConfig) {
+    logger.warn('⚠ AgentRunner 将以未配置状态启动 — 请先通过 Web UI /settings/model 配置模型');
+  } else {
+    try {
+      runner = await createAgentRunner({
+        config,
+        logger,
+        weixin: {
+          sendMessage: async (to: string, text: string) => {
+            await throttle.enqueue(to, text);
+          },
         },
-      },
-      skillsManager,
-      slashRegistry,
-      acpManager,
-    });
-  } catch (error) {
-    logger.error('创建 AgentRunner 失败:', error);
-    process.exit(1);
+        skillsManager,
+        slashRegistry,
+        acpManager,
+      });
+    } catch (error) {
+      logger.error('创建 AgentRunner 失败:', error);
+      process.exit(1);
+    }
   }
   
-  const bridge = runner.getBridge();
+  const bridge = runner ? runner.getBridge() : null;
 
   // 消息监控循环
   let running = true;
   let lastEventTime = Date.now();
   let getUpdatesBuf = '';
 
-  logger.info('👂 开始监听微信消息...');
+  if (bridge) {
+    logger.info('👂 开始监听微信消息...');
+  } else {
+    logger.info('⏸ 消息监听未激活（模型未配置）');
+  }
 
   const pollMessage = async () => {
-    if (!running) return;
+    if (!running || !bridge) return;
 
     const result = await withRetry(
       async () => {
@@ -415,8 +422,10 @@ handler: ./handler.js
     }
   };
 
-  // 启动轮询
-  pollMessage();
+  // 启动轮询（仅在模型已配置时）
+  if (bridge) {
+    pollMessage();
+  }
   
   // 定期心跳日志
   const heartbeat = setInterval(() => {
@@ -432,7 +441,9 @@ handler: ./handler.js
     clearInterval(heartbeat);
     clearInterval(acpTimeoutCheck);
     await throttle.flush();
-    await runner.stop();
+    if (runner) {
+      await runner.stop();
+    }
     logger.info('👋 已退出');
     process.exit(0);
   };

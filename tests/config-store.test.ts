@@ -12,6 +12,8 @@ import {
   saveConfig,
   loadSendThrottleInterval,
   saveSendThrottleInterval,
+  loadModelConfig,
+  saveModelConfig,
 } from '../dist/config-store.js';
 
 describe('config-store', () => {
@@ -248,6 +250,124 @@ describe('config-store', () => {
       );
       const parsed = JSON.parse(content);
       expect(parsed.sendThrottleIntervalMs).toBe(1500);
+    });
+  });
+
+  describe('loadModelConfig', () => {
+    it('should return model section from config.json', async () => {
+      const config = {
+        model: {
+          baseUrl: 'https://api.example.com/v1',
+          modelName: 'gpt-4o',
+          sysPrompt: 'Test prompt',
+        },
+      };
+      await fs.writeFile(
+        path.join(testDir, 'config.json'),
+        JSON.stringify(config, null, 2),
+        'utf-8'
+      );
+
+      const result = await loadModelConfig();
+      expect(result).toEqual({
+        baseUrl: 'https://api.example.com/v1',
+        modelName: 'gpt-4o',
+        sysPrompt: 'Test prompt',
+      });
+    });
+
+    it('should return empty object on read failure', async () => {
+      delete process.env.OWNCLAW_STATE_DIR;
+      // Point to a nonexistent directory
+      process.env.OWNCLAW_STATE_DIR = path.join(testDir, 'nonexistent');
+
+      const result = await loadModelConfig();
+      expect(result).toEqual({});
+    });
+
+    it('should return empty object when model section is absent', async () => {
+      await fs.writeFile(
+        path.join(testDir, 'config.json'),
+        JSON.stringify({ sendThrottleIntervalMs: 5000 }),
+        'utf-8'
+      );
+
+      const result = await loadModelConfig();
+      expect(result).toEqual({});
+    });
+  });
+
+  describe('saveModelConfig', () => {
+    it('should merge with existing config and write correctly', async () => {
+      // Pre-existing config with channel settings
+      await fs.writeFile(
+        path.join(testDir, 'config.json'),
+        JSON.stringify({
+          sendThrottleIntervalMs: 3000,
+          channel: { weixin: { enabled: true } },
+        }),
+        'utf-8'
+      );
+
+      await saveModelConfig({
+        baseUrl: 'https://api.example.com/v1',
+        modelName: 'gpt-4o',
+      });
+
+      const content = await fs.readFile(
+        path.join(testDir, 'config.json'),
+        'utf-8'
+      );
+      const parsed = JSON.parse(content);
+      expect(parsed.sendThrottleIntervalMs).toBe(3000);
+      expect(parsed.model).toEqual({
+        baseUrl: 'https://api.example.com/v1',
+        modelName: 'gpt-4o',
+      });
+    });
+
+    it('should update existing model fields without removing others', async () => {
+      await fs.writeFile(
+        path.join(testDir, 'config.json'),
+        JSON.stringify({
+          model: {
+            baseUrl: 'https://old.example.com/v1',
+            modelName: 'claude-3',
+            sysPrompt: 'Old prompt',
+          },
+        }),
+        'utf-8'
+      );
+
+      await saveModelConfig({ baseUrl: 'https://new.example.com/v1' });
+
+      const content = await fs.readFile(
+        path.join(testDir, 'config.json'),
+        'utf-8'
+      );
+      const parsed = JSON.parse(content);
+      expect(parsed.model).toEqual({
+        baseUrl: 'https://new.example.com/v1',
+        modelName: 'claude-3',
+        sysPrompt: 'Old prompt',
+      });
+    });
+
+    it('should create config file when it does not exist', async () => {
+      await saveModelConfig({
+        baseUrl: 'https://api.example.com/v1',
+        modelName: 'gpt-4o',
+      });
+
+      const content = await fs.readFile(
+        path.join(testDir, 'config.json'),
+        'utf-8'
+      );
+      const parsed = JSON.parse(content);
+      expect(parsed.model).toEqual({
+        baseUrl: 'https://api.example.com/v1',
+        modelName: 'gpt-4o',
+      });
     });
   });
 });

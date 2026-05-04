@@ -46,6 +46,44 @@ describe('AgentRunner', () => {
       expect(mockLogger.info).toHaveBeenCalledWith('AgentRunner stopped');
     });
   });
+
+  describe('isValid', () => {
+    it('should return true when baseUrl is set', () => {
+      expect(runner.isValid()).toBe(true);
+    });
+
+    it('should return false when baseUrl is not set', () => {
+      const invalidRunner = new AgentRunner({
+        model: {
+          baseUrl: '',
+          modelName: 'gpt-4o',
+        },
+        sysPrompt: 'Test',
+        weixin: {
+          sendMessage: mockSendMessage,
+        },
+        logger: mockLogger,
+      });
+      expect(invalidRunner.isValid()).toBe(false);
+    });
+  });
+
+  describe('updateModelConfig', () => {
+    it('should rebuild agent and update bridge', async () => {
+      const bridgeBefore = runner.getBridge();
+
+      await runner.updateModelConfig({
+        baseUrl: 'https://new.example.com/v1',
+        modelName: 'claude-3',
+      }, 'New system prompt');
+
+      const bridgeAfter = runner.getBridge();
+
+      // Bridge reference should be the same object (setAgent updates in place)
+      expect(bridgeAfter).toBe(bridgeBefore);
+      expect(runner.isValid()).toBe(true);
+    });
+  });
 });
 
 describe('createAgentRunner', () => {

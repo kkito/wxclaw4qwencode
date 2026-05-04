@@ -24,10 +24,13 @@ export interface AgentRunnerConfig {
 export class AgentRunner {
   private agent: Agent;
   private bridge: WeixinBridge;
+  private currentToolkit: Toolkit;
   private logger: Logger;
+  private modelConfig?: CustomModelConfig;
 
   constructor(config: AgentRunnerConfig) {
     this.logger = config.logger || getGlobalLogger();
+    this.modelConfig = config.model;
 
     // 创建模型客户端
     const model = new CustomModel(config.model);
@@ -41,6 +44,8 @@ export class AgentRunner {
       // 没有 SkillsManager 时创建空 Toolkit
       toolkit = new Toolkit({ builtInSkillTool: false });
     }
+
+    this.currentToolkit = toolkit;
 
     // 创建 Agent（传入 toolkit）
     this.agent = new Agent({
@@ -60,6 +65,29 @@ export class AgentRunner {
       slashRegistry: config.slashRegistry,
       acpManager: config.acpManager,
     });
+  }
+
+  async updateModelConfig(config: CustomModelConfig, sysPrompt?: string): Promise<void> {
+    this.modelConfig = config;
+
+    // 重建 CustomModel
+    const model = new CustomModel(config);
+
+    // 重建 Agent，保持相同的 toolkit
+    this.agent = new Agent({
+      name: 'weixin-assistant',
+      sysPrompt: sysPrompt || '你是一个友好的 AI 助手。',
+      model,
+      toolkit: this.currentToolkit,
+      maxIters: 10,
+    });
+
+    // 更新 WeixinBridge 的 agent 引用
+    this.bridge.setAgent(this.agent);
+  }
+
+  isValid(): boolean {
+    return !!this.modelConfig?.baseUrl;
   }
 
   getBridge(): WeixinBridge {
@@ -88,7 +116,7 @@ export interface AgentRunnerOptions {
 }
 
 export async function createAgentRunner(options: AgentRunnerOptions): Promise<AgentRunner> {
-  const config = options.config || loadConfig();
+  const config = options.config || await loadConfig();
 
   // 如果传入了 logger，则设置为全局 logger
   if (options.logger) {
@@ -96,6 +124,10 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
   }
 
   const logger = options.logger || createLogger({ level: config.log.level, prefix: '[AgentRunner] ' });
+
+  if (!config.agentscope.model.baseUrl) {
+    throw new Error('模型 API 地址 (baseUrl) 未设置，请通过环境变量 AGENT_MODEL_BASE_URL 或 config.json 配置');
+  }
 
   const runner = new AgentRunner({
     model: {

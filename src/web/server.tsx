@@ -9,11 +9,13 @@ import { SkillsPage } from './views/skills.js';
 import { ExecutorPage } from './views/executor.js';
 import { createSettingsRouter } from './views/settings.js';
 import { createAcpDirsRouter } from './views/acp-dirs.js';
+import { createModelConfigRouter } from './views/model-config.js';
 import { CronManager, CreateJobInput, UpdateJobInput } from '../cron/index.js';
 import { SkillsManager, CreateSkillInput, UpdateSkillInput } from '../skills/index.js';
 import { ExecutorManager } from '../executor/manager.js';
 import { loadAcpProjectDirs, saveAcpProjectDirs } from '../acp-config/store.js';
-import { loadChannelConfig, saveChannelConfig, type ChannelConfig } from '../config-store.js';
+import { loadChannelConfig, saveChannelConfig, type ChannelConfig, loadModelConfig, saveModelConfig } from '../config-store.js';
+import type { AgentRunner } from '../runner/agent-runner.js';
 
 export interface WebServerConfig {
   port: number;
@@ -21,6 +23,7 @@ export interface WebServerConfig {
   cronManager?: CronManager;
   skillsManager?: SkillsManager;
   executorManager?: ExecutorManager;
+  agentRunner?: AgentRunner;
 }
 
 export function createWebServer(config: WebServerConfig): { app: Hono; server: ServerType } {
@@ -274,6 +277,36 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
     }
   });
 
+  // ===== Model Config API =====
+  app.get('/api/model/config', async (c) => {
+    const model = await loadModelConfig();
+    // DO NOT include apiKey in response
+    const { apiKey, ...safeConfig } = model;
+    return c.json({ config: safeConfig });
+  });
+
+  app.put('/api/model/config', async (c) => {
+    try {
+      const body = await c.req.json<{ baseUrl?: string; apiKey?: string; modelName?: string; sysPrompt?: string }>();
+      if (!body.baseUrl) {
+        return c.json({ error: 'baseUrl is required' }, 400);
+      }
+      await saveModelConfig(body);
+      // Trigger hot reload if agentRunner is provided
+      if (config.agentRunner) {
+        await config.agentRunner.updateModelConfig(
+          { baseUrl: body.baseUrl, apiKey: body.apiKey, modelName: body.modelName ?? 'gpt-4o' },
+          body.sysPrompt,
+        );
+      }
+      const { apiKey, ...safeConfig } = body;
+      return c.json({ config: safeConfig });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Internal server error';
+      return c.json({ error: message }, 500);
+    }
+  });
+
   // ===== ACP Dirs Settings Page =====
   app.route('/settings/acp-dirs', createAcpDirsRouter());
 
@@ -430,6 +463,9 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
 
   // 设置页面路由
   app.route('/settings', createSettingsRouter());
+
+  // 模型配置页面路由
+  app.route('/settings/model', createModelConfigRouter());
 
   // 启动服务器
   const server = serve({
