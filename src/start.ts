@@ -357,7 +357,7 @@ handler: ./handler.js
   // === 启动 WebSocket Channel ===
   let wsChannel: WebSocketChannel | undefined;
   if (runner) {
-    wsChannel = new WebSocketChannel({ port: 8765 });
+    wsChannel = new WebSocketChannel({ port: 3526 });
     await wsChannel.start();
     wsChannel.onMessage(async (msg) => {
       if (bridge) {
@@ -375,7 +375,7 @@ handler: ./handler.js
         }
       }
     });
-    logger.info(`🔌 WebSocket Channel 已启动 (ws://0.0.0.0:8765)`);
+    logger.info(`🔌 WebSocket Channel 已启动 (ws://0.0.0.0:3526)`);
   }
 
   // 消息监控循环

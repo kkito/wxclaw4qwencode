@@ -231,6 +231,7 @@ src/
 | [ACP 协议](docs/acp-protocol.md) | ACP 数据协议详解 |
 | [微信核心](docs/openclaw-weixin-core.md) | 微信通道 API |
 | [微信群支持](docs/weixin-group-support.md) | 群消息处理 |
+| [WebSocket Channel](docs/websocket-channel.md) | WebSocket 消息通道 API、协议、多客户端连接 |
 | [测试指南](docs/testing.md) | 测试体系说明 |
 
 ## 依赖

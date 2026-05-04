@@ -8,7 +8,7 @@ import type { ChannelBridge } from './channel-bridge.js';
 import type { ChannelMessage } from './types.js';
 
 export interface WebSocketChannelOptions {
-  /** WebSocket 监听端口，默认 8765 */
+  /** WebSocket 监听端口，默认 3526 */
   port?: number;
   /** WebSocket 监听地址，默认 '0.0.0.0' */
   host?: string;
@@ -25,7 +25,7 @@ export class WebSocketChannel implements ChannelBridge {
   }
 
   async start(): Promise<void> {
-    const port = this.options.port ?? 8765;
+    const port = this.options.port ?? 3526;
     const host = this.options.host ?? '0.0.0.0';
 
     this.wss = new WebSocketServer({ port, host });
