@@ -7,6 +7,7 @@ import { IndexPage } from './views/index.js';
 import { CronPage } from './views/cron.js';
 import { SkillsPage } from './views/skills.js';
 import { ExecutorPage } from './views/executor.js';
+import { WebSocketClientPage } from './views/websocket.js';
 import { createSettingsRouter } from './views/settings.js';
 import { createAcpDirsRouter } from './views/acp-dirs.js';
 import { createModelConfigRouter } from './views/model-config.js';
@@ -449,6 +450,11 @@ export function createWebServer(config: WebServerConfig): { app: Hono; server: S
   // 首页路由
   app.get('/', (c) => {
     return c.html(<IndexPage title="OwnClaw" version="1.0.0" />);
+  });
+
+  // WebSocket 测试页面
+  app.get('/ws', (c) => {
+    return c.html(<WebSocketClientPage />);
   });
 
   // Cron 页面路由

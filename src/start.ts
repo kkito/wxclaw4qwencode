@@ -34,6 +34,7 @@ import createAcpHandler from './commands/acp/handler.js';
 import createStreamingHandler from './commands/streaming/handler.js';
 import { createSendThrottle } from './utils/send-throttle.js';
 import { loadSendThrottleInterval, loadModelConfig } from './config-store.js';
+import { WebSocketChannel } from './channel/websocket-bridge.js';
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url);
@@ -353,6 +354,30 @@ handler: ./handler.js
   
   const bridge = runner ? runner.getBridge() : null;
 
+  // === 启动 WebSocket Channel ===
+  let wsChannel: WebSocketChannel | undefined;
+  if (runner) {
+    wsChannel = new WebSocketChannel({ port: 8765 });
+    await wsChannel.start();
+    wsChannel.onMessage(async (msg) => {
+      if (bridge) {
+        try {
+          // 将 ChannelMessage 转换为 WeixinMessage 格式
+          const weixinMsg: WeixinMessage = {
+            from_user_id: msg.from,
+            to_user_id: msg.to,
+            message_type: 1, // 文本消息
+            item_list: [{ type: 1, text_item: { text: msg.text } }],
+          };
+          await bridge.handleMessage(weixinMsg);
+        } catch (error) {
+          logger.error('处理 WebSocket 消息失败:', error);
+        }
+      }
+    });
+    logger.info(`🔌 WebSocket Channel 已启动 (ws://0.0.0.0:8765)`);
+  }
+
   // 消息监控循环
   let running = true;
   let lastEventTime = Date.now();
@@ -441,6 +466,9 @@ handler: ./handler.js
     clearInterval(heartbeat);
     clearInterval(acpTimeoutCheck);
     await throttle.flush();
+    if (wsChannel) {
+      await wsChannel.stop();
+    }
     if (runner) {
       await runner.stop();
     }
