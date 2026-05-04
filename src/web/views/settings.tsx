@@ -129,6 +129,14 @@ const SettingsPage: FC<SettingsPageProps> = (props) => {
           ) : null}
 
           <div class="card">
+            <h2 style={{ 'font-size': '1.25rem', 'margin-bottom': '1rem' }}>模型配置</h2>
+            <p style={{ 'font-size': '0.875rem', 'color': 'hsl(var(--muted-foreground))', 'margin-bottom': '0.75rem' }}>
+              配置模型 API 地址、API Key、模型名称和系统提示词。
+            </p>
+            <a href="/settings/model" class="btn btn-primary" style={{ 'text-decoration': 'none', 'display': 'inline-block' }}>配置模型</a>
+          </div>
+
+          <div class="card">
             <h2 style={{ 'font-size': '1.25rem', 'margin-bottom': '1rem' }}>发送消息限流</h2>
             <form method="post" action="/settings">
               <div class="form-group">
