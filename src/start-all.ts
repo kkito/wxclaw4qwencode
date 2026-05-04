@@ -25,6 +25,7 @@ const distDir = path.resolve(__dirname);
 const WX_PREFIX = '\x1b[32m[WeChat]\x1b[0m ';   // 绿色
 const WEB_PREFIX = '\x1b[36m[Web]   \x1b[0m ';   // 青色
 const WECOM_PREFIX = '\x1b[35m[WeCom] \x1b[0m '; // 紫色
+const FEISHU_PREFIX = '\x1b[33m[Feishu] \x1b[0m '; // 黄色
 
 function prefixStream(prefix: string, stream: NodeJS.ReadableStream | null): void {
   if (!stream) return;
@@ -42,6 +43,7 @@ function startAll(): void {
   const weixinScript = path.join(distDir, 'start.js');
   const webScript = path.join(distDir, 'start-web.js');
   const wecomScript = path.join(distDir, 'start-wecom.js');
+  const feishuScript = path.join(distDir, 'start-feishu.js');
 
   console.log('\n🚀 正在启动 OwnClaw（微信 + Web）...\n');
 
@@ -67,8 +69,9 @@ function startAll(): void {
   prefixStream(WEB_PREFIX, webProc.stdout);
   prefixStream(WEB_PREFIX, webProc.stderr);
 
-  // 启动企业微信（如果已启用）
+  // 启动企业微信 / 飞书（如果已启用）
   let wecomProc: ChildProcess | null = null;
+  let feishuProc: ChildProcess | null = null;
   loadChannelConfig().then((channelConfig) => {
     if (channelConfig.wecom?.enabled && channelConfig.wecom.botId && channelConfig.wecom.secret) {
       console.log('🤖 企业微信通道已启用，正在启动...\n');
@@ -86,8 +89,25 @@ function startAll(): void {
         }
       });
     }
+
+    if (channelConfig.feishu?.enabled && channelConfig.feishu.appId && channelConfig.feishu.appSecret) {
+      console.log('🕊️ 飞书通道已启用，正在启动...\n');
+      feishuProc = spawn(nodePath, [feishuScript], {
+        stdio: ['inherit', 'pipe', 'pipe'],
+        env: process.env,
+      });
+      processes.push(feishuProc);
+      prefixStream(FEISHU_PREFIX, feishuProc.stdout);
+      prefixStream(FEISHU_PREFIX, feishuProc.stderr);
+
+      feishuProc.on('exit', (code) => {
+        if (!shuttingDown) {
+          shutdownAll('SIGTERM', code, '飞书服务');
+        }
+      });
+    }
   }).catch((err) => {
-    console.error('加载企业微信配置失败:', err);
+    console.error('加载通道配置失败:', err);
   });
 
   // 任一子进程退出时，关闭所有进程

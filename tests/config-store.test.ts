@@ -63,6 +63,7 @@ describe('config-store', () => {
         channel: {
           weixin: { enabled: true },
           wecom: { enabled: false, botId: '', secret: '' },
+          feishu: { enabled: false, appId: '', appSecret: '' },
         },
       });
     });
@@ -83,6 +84,7 @@ describe('config-store', () => {
         channel: {
           weixin: { enabled: true },
           wecom: { enabled: false, botId: '', secret: '' },
+          feishu: { enabled: false, appId: '', appSecret: '' },
         },
       });
     });
@@ -112,6 +114,7 @@ describe('config-store', () => {
         channel: {
           weixin: { enabled: true },
           wecom: { enabled: false, botId: '', secret: '' },
+          feishu: { enabled: false, appId: '', appSecret: '' },
         },
       });
     });
@@ -125,6 +128,7 @@ describe('config-store', () => {
         channel: {
           weixin: { enabled: true },
           wecom: { enabled: false, botId: '', secret: '' },
+          feishu: { enabled: false, appId: '', appSecret: '' },
         },
       });
     });
