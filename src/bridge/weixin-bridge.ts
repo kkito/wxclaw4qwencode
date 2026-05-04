@@ -101,9 +101,17 @@ export class WeixinBridge {
 
       // === ACP 模式消息路由 ===
       if (this.acpManager?.hasActiveSession(userId)) {
-        // 检查是否是 exit 命令
-        if (text.toLowerCase() === 'exit') {
+        // 检查是否是 /exit 命令
+        if (text.toLowerCase() === '/exit') {
           await this.acpManager.endSession(userId, async (msg) => {
+            await this.sendMessageFn(userId, msg);
+          });
+          return;
+        }
+
+        // 检查是否是 /cancel 命令
+        if (text.toLowerCase() === '/cancel') {
+          await this.acpManager.cancelTask(userId, async (msg) => {
             await this.sendMessageFn(userId, msg);
           });
           return;

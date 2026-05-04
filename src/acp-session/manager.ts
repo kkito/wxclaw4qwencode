@@ -32,7 +32,7 @@ export class AcpSessionManager {
     sendToWeixin: (msg: string) => Promise<void>,
   ): Promise<void> {
     if (this.sessions.has(userId)) {
-      await sendToWeixin('⚠️ 您已经在 ACP 模式中了，请先 exit 退出');
+      await sendToWeixin('⚠️ 您已经在 ACP 模式中了，请先发送 /exit 退出');
       return;
     }
 
@@ -70,7 +70,7 @@ export class AcpSessionManager {
     };
 
     this.sessions.set(userId, session);
-    await sendToWeixin(`✅ 已进入 ACP 模式\n工作目录: ${cwd}\n发送 exit 退出`);
+    await sendToWeixin(`✅ 已进入 ACP 模式\n工作目录: ${cwd}\n发送 /exit 退出，/cancel 取消当前任务`);
     this.startTimeoutTimer(userId);
   }
 
@@ -123,7 +123,27 @@ export class AcpSessionManager {
 
     // 发送完成标识，标记大模型本轮回复已结束
     if (result.stopReason) {
-      await sendToWeixin(`\n---\n✅ ACP 回复完成 (停止原因: ${result.stopReason})`);
+      const msg = result.stopReason === 'cancelled'
+        ? '\n---\n⛔ ACP 任务已取消'
+        : `\n---\n✅ ACP 回复完成 (停止原因: ${result.stopReason})`;
+      await sendToWeixin(msg);
+    }
+  }
+
+  async cancelTask(
+    userId: string,
+    sendToWeixin: (msg: string) => Promise<void>,
+  ): Promise<void> {
+    const session = this.sessions.get(userId);
+    if (!session) {
+      await sendToWeixin('⚠️ 当前不在 ACP 模式中');
+      return;
+    }
+
+    try {
+      await session.client.cancel();
+    } catch (err) {
+      await sendToWeixin(`❌ 取消失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
